@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – WODpilot{% endblock %}
+{% block content %}
+<h1 class="mb-4">Dashboard</h1>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card p-3 text-center">
+            <div style="font-size:2rem;color:#58a6ff;">{{ stats.user_count }}</div>
+            <div class="text-muted">Athleten</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card p-3 text-center">
+            <div style="font-size:2rem;color:#3fb950;">{{ stats.activity_count }}</div>
+            <div class="text-muted">Aktivitäten</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card p-3 text-center">
+            <div style="font-size:2rem;color:#e3b341;">{{ stats.wod_count }}</div>
+            <div class="text-muted">WODs</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card p-3 text-center">
+            <div style="font-size:2rem;color:#bc8cff;">{{ stats.memory_count }}</div>
+            <div class="text-muted">Memory-Einträge</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card p-3">
+            <h5 class="mb-3">Manuell auslösen</h5>
+            <div class="d-flex gap-2 flex-wrap">
+                <form method="post" action="/trigger/garmin-sync">
+                    <button class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-arrow-repeat"></i> Garmin Sync
+                    </button>
+                </form>
+                <form method="post" action="/trigger/wod-scrape">
+                    <button class="btn btn-outline-warning btn-sm">
+                        <i class="bi bi-cloud-download"></i> WOD Scrape
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="mb-3">Neueste Athleten</h5>
+        <table class="table table-sm">
+            <thead>
+                <tr><th>Name</th><th>Username</th><th>Modell</th><th>Garmin</th><th>Registriert</th></tr>
+            </thead>
+            <tbody>
+                {% for u in recent_users %}
+                <tr>
+                    <td><a href="/users/{{ u.id }}">{{ u.full_name or '–' }}</a></td>
+                    <td>@{{ u.username or '–' }}</td>
+                    <td><code>{{ u.llm_model or '–' }}</code></td>
+                    <td>{% if u.garmin_email %}<span class="badge bg-success">✓</span>{% else %}<span class="badge bg-secondary">–</span>{% endif %}</td>
+                    <td class="text-muted">{{ u.created_at[:10] if u.created_at else '–' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <a href="/users" class="btn btn-outline-secondary btn-sm">Alle Athleten →</a>
+    </div>
+</div>
+{% endblock %}

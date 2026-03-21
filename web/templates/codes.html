@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Invite Codes – WODpilot{% endblock %}
+{% block content %}
+<h1 class="mb-4">Invite Codes</h1>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="mb-3">Neue Codes generieren</h5>
+        <form method="post" class="row g-2 align-items-end">
+            <div class="col-auto">
+                <label class="form-label">Anzahl</label>
+                <input type="number" name="count" class="form-control" value="1" min="1" max="50" style="width:80px;">
+            </div>
+            <div class="col-auto">
+                <label class="form-label">Läuft ab in (Tage, leer = nie)</label>
+                <input type="number" name="expires_days" class="form-control" placeholder="z.B. 7" style="width:120px;">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">Generieren</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr><th>Code</th><th>Status</th><th>Verwendet von</th><th>Läuft ab</th><th>Erstellt</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for c in codes %}
+                <tr>
+                    <td><code>{{ c.code }}</code></td>
+                    <td>
+                        {% if c.used_by %}
+                        <span class="badge bg-success">Verwendet</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">Verfügbar</span>
+                        {% endif %}
+                    </td>
+                    <td>{% if c.used_by %}User #{{ c.used_by }}{% else %}–{% endif %}</td>
+                    <td class="text-muted">{{ (c.expires_at or '')[:10] or '–' }}</td>
+                    <td class="text-muted">{{ (c.created_at or '')[:10] }}</td>
+                    <td>
+                        {% if not c.used_by %}
+                        <form method="post" action="/codes/{{ c.id }}/delete" style="display:inline">
+                            <button class="btn btn-outline-danger btn-sm" onclick="return confirm('Löschen?')">🗑️</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

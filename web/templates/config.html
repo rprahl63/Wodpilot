@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Konfiguration – WODpilot{% endblock %}
+{% block content %}
+<h1 class="mb-4">Konfiguration</h1>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            <div class="mb-4">
+                <label class="form-label fw-bold">WOD Quellen (JSON)</label>
+                <p class="text-muted small">Liste von Boxen mit name, url und CSS-Selektor.</p>
+                <textarea name="wod_sources" class="form-control font-monospace" rows="10">{{ config.get('wod_sources', '[]') }}</textarea>
+                <div class="form-text">
+                    Beispiel:
+                    <code>[{"name": "CrossFit Mitte", "url": "https://crossfitmitte.de/wod", "selector": ".wod-content"}]</code>
+                </div>
+            </div>
+
+            <h5 class="mb-3">Cron-Zeiten</h5>
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <label class="form-label">Garmin Sync</label>
+                    <input type="text" name="garmin_sync_cron" class="form-control font-monospace"
+                           value="{{ config.get('garmin_sync_cron', '0 5 * * *') }}" placeholder="0 5 * * *">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">WOD Scrape</label>
+                    <input type="text" name="wod_scrape_cron" class="form-control font-monospace"
+                           value="{{ config.get('wod_scrape_cron', '30 5 * * *') }}" placeholder="30 5 * * *">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Morgendliches Briefing</label>
+                    <input type="text" name="morning_briefing_cron" class="form-control font-monospace"
+                           value="{{ config.get('morning_briefing_cron', '0 7 * * *') }}" placeholder="0 7 * * *">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Speichern</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-body">
+        <h5>Alle Config-Einträge</h5>
+        <table class="table table-sm">
+            <thead><tr><th>Key</th><th>Value</th></tr></thead>
+            <tbody>
+                {% for k, v in config.items() %}
+                <tr><td><code>{{ k }}</code></td><td><small>{{ v[:200] }}</small></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}WODs – WODpilot{% endblock %}
+{% block content %}
+<h1 class="mb-4">WODs <span class="badge bg-secondary">{{ wods|length }}</span></h1>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr><th>Datum</th><th>Quelle</th><th>Inhalt (Vorschau)</th><th>Gescrapt</th></tr>
+            </thead>
+            <tbody>
+                {% for w in wods %}
+                <tr>
+                    <td><strong>{{ w.date }}</strong></td>
+                    <td>{{ w.source }}</td>
+                    <td><small>{{ w.content[:200] }}{% if w.content|length > 200 %}…{% endif %}</small></td>
+                    <td class="text-muted"><small>{{ (w.scraped_at or '')[:16] }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Athleten – WODpilot{% endblock %}
+{% block content %}
+<h1 class="mb-4">Athleten <span class="badge bg-secondary">{{ users|length }}</span></h1>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>ID</th><th>Name</th><th>Username</th><th>Rolle</th>
+                    <th>Modell</th><th>Garmin</th><th>Briefing</th>
+                    <th>API-Calls heute</th><th>Registriert</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td class="text-muted">{{ u.id }}</td>
+                    <td><a href="/users/{{ u.id }}">{{ u.full_name or '–' }}</a></td>
+                    <td>@{{ u.username or '–' }}</td>
+                    <td>
+                        {% if u.role == 'admin' %}
+                        <span class="badge badge-admin">admin</span>
+                        {% else %}
+                        <span class="badge bg-secondary">user</span>
+                        {% endif %}
+                    </td>
+                    <td><small><code>{{ (u.llm_model or '–')[:30] }}</code></small></td>
+                    <td>{% if u.garmin_email %}<span class="text-success">✓</span>{% else %}<span class="text-muted">–</span>{% endif %}</td>
+                    <td>{% if u.briefing_enabled %}<span class="text-success">✓</span>{% else %}<span class="text-muted">✗</span>{% endif %}</td>
+                    <td>{{ u.api_calls_today or 0 }}</td>
+                    <td class="text-muted">{{ u.created_at[:10] if u.created_at else '–' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

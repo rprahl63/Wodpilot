@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}{{ user.full_name or user.username }} – WODpilot{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+    <a href="/users" class="btn btn-outline-secondary btn-sm">← Zurück</a>
+    <h1 class="mb-0">{{ user.full_name or user.username or 'Athlet' }}</h1>
+    <span class="badge {% if user.role == 'admin' %}badge-admin{% else %}bg-secondary{% endif %}">{{ user.role }}</span>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="mb-3">Profil bearbeiten</h5>
+                <form method="post">
+                    <input type="hidden" name="action" value="update_profile">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Max HR</label>
+                            <input type="number" name="hr_max" class="form-control" value="{{ user.hr_max or 190 }}">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Resting HR</label>
+                            <input type="number" name="hr_rest" class="form-control" value="{{ user.hr_rest or 55 }}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">LLM Modell</label>
+                        <input type="text" name="llm_model" class="form-control" value="{{ user.llm_model or 'claude-sonnet-4-20250514' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Neuer Anthropic API-Key <small class="text-muted">(leer lassen = unverändert)</small></label>
+                        <input type="password" name="llm_api_key" class="form-control" placeholder="sk-ant-...">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Timezone</label>
+                        <input type="text" name="timezone" class="form-control" value="{{ user.timezone or 'Europe/Berlin' }}">
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" name="briefing_enabled" class="form-check-input" id="briefing_enabled"
+                               {% if user.briefing_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="briefing_enabled">Morgendliches Briefing</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Speichern</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5>Info</h5>
+                <dl class="row mb-0">
+                    <dt class="col-5">Telegram ID</dt><dd class="col-7"><code>{{ user.telegram_id }}</code></dd>
+                    <dt class="col-5">Garmin E-Mail</dt><dd class="col-7">{{ user.garmin_email or '–' }}</dd>
+                    <dt class="col-5">API-Calls heute</dt><dd class="col-7">{{ user.api_calls_today or 0 }}</dd>
+                    <dt class="col-5">Registriert</dt><dd class="col-7">{{ (user.created_at or '')[:16] }}</dd>
+                    <dt class="col-5">Consent</dt><dd class="col-7">{{ (user.consent_given_at or '')[:16] or '–' }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="text-danger">Danger Zone</h5>
+                <form method="post" onsubmit="return confirm('Wirklich löschen?');">
+                    <input type="hidden" name="action" value="delete">
+                    <button class="btn btn-outline-danger btn-sm">🗑️ User löschen (DSGVO)</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mt-1">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body">
+                <h5>Semantic Memory ({{ memories|length }})</h5>
+                {% if memories %}
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Key</th><th>Value</th><th>Kategorie</th></tr></thead>
+                    <tbody>
+                        {% for m in memories %}
+                        <tr>
+                            <td><code>{{ m.key }}</code></td>
+                            <td>{{ m.value[:80] }}</td>
+                            <td><span class="badge bg-secondary">{{ m.category or '–' }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted mb-0">Noch keine Memory-Einträge.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body">
+                <h5>Episodic Memory ({{ episodes|length }})</h5>
+                {% if episodes %}
+                <ul class="list-unstyled mb-0">
+                    {% for e in episodes %}
+                    <li class="mb-1">
+                        <span class="badge bg-secondary me-1">{{ e.category or '–' }}</span>
+                        {{ e.content[:100] }}
+                        <small class="text-muted">{{ (e.created_at or '')[:10] }}</small>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">Noch keine Episoden.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
