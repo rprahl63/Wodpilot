@@ -86,15 +86,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy via SSH
+      - name: Write .env and deploy via SSH
         uses: appleboy/ssh-action@v1.1.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          envs: TELEGRAM_TOKEN,ADMIN_TELEGRAM_ID,SUPABASE_URL,SUPABASE_SERVICE_KEY,ENCRYPTION_KEY,WEB_SECRET_KEY,WEB_ADMIN_PASSWORD,DOMAIN,ACME_EMAIL,OPENAI_API_KEY,DEFAULT_LLM_MODEL,MAX_API_CALLS_PER_DAY,GARMIN_SYNC_CRON,WOD_SCRAPE_CRON,MORNING_BRIEFING_CRON
           script: |
             set -e
+            mkdir -p /opt/wodpilot
             cd /opt/wodpilot
+
+            # Write .env from secrets (one echo per line avoids heredoc quoting issues)
+            {
+              echo "TELEGRAM_TOKEN=$TELEGRAM_TOKEN"
+              echo "ADMIN_TELEGRAM_ID=$ADMIN_TELEGRAM_ID"
+              echo "SUPABASE_URL=$SUPABASE_URL"
+              echo "SUPABASE_SERVICE_KEY=$SUPABASE_SERVICE_KEY"
+              echo "ENCRYPTION_KEY=$ENCRYPTION_KEY"
+              echo "WEB_SECRET_KEY=$WEB_SECRET_KEY"
+              echo "WEB_ADMIN_PASSWORD=$WEB_ADMIN_PASSWORD"
+              echo "DOMAIN=$DOMAIN"
+              echo "ACME_EMAIL=$ACME_EMAIL"
+              echo "OPENAI_API_KEY=$OPENAI_API_KEY"
+              echo "DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-claude-sonnet-4-20250514}"
+              echo "MAX_API_CALLS_PER_DAY=${MAX_API_CALLS_PER_DAY:-50}"
+              echo "GARMIN_SYNC_CRON=${GARMIN_SYNC_CRON:-0 5 * * *}"
+              echo "WOD_SCRAPE_CRON=${WOD_SCRAPE_CRON:-30 5 * * *}"
+              echo "MORNING_BRIEFING_CRON=${MORNING_BRIEFING_CRON:-0 7 * * *}"
+              echo "GITHUB_OWNER=${{ github.repository_owner }}"
+            } > .env
+            chmod 600 .env
 
             # Pull new images
             echo "${{ secrets.GITHUB_TOKEN }}" | \
