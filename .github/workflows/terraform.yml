@@ -1,0 +1,82 @@
+name: Terraform – Provision VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Terraform action to run"
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+jobs:
+  terraform:
+    name: Terraform ${{ github.event.inputs.action }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # needed to commit state back to repo
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+
+      - name: Terraform Init
+        env:
+          TF_VAR_hcloud_token: ${{ secrets.HETZNER_API_TOKEN }}
+          TF_VAR_ssh_public_key: ${{ secrets.VPS_SSH_PUBLIC_KEY }}
+        run: terraform init
+
+      - name: Terraform Plan
+        if: github.event.inputs.action == 'plan' || github.event.inputs.action == 'apply'
+        env:
+          TF_VAR_hcloud_token: ${{ secrets.HETZNER_API_TOKEN }}
+          TF_VAR_ssh_public_key: ${{ secrets.VPS_SSH_PUBLIC_KEY }}
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        if: github.event.inputs.action == 'apply'
+        env:
+          TF_VAR_hcloud_token: ${{ secrets.HETZNER_API_TOKEN }}
+          TF_VAR_ssh_public_key: ${{ secrets.VPS_SSH_PUBLIC_KEY }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Terraform Destroy
+        if: github.event.inputs.action == 'destroy'
+        env:
+          TF_VAR_hcloud_token: ${{ secrets.HETZNER_API_TOKEN }}
+          TF_VAR_ssh_public_key: ${{ secrets.VPS_SSH_PUBLIC_KEY }}
+        run: terraform destroy -auto-approve
+
+      - name: Show server IP
+        if: github.event.inputs.action == 'apply'
+        env:
+          TF_VAR_hcloud_token: ${{ secrets.HETZNER_API_TOKEN }}
+          TF_VAR_ssh_public_key: ${{ secrets.VPS_SSH_PUBLIC_KEY }}
+        run: |
+          echo "### VPS provisioned" >> $GITHUB_STEP_SUMMARY
+          echo "IP: $(terraform output -raw server_ip)" >> $GITHUB_STEP_SUMMARY
+          echo "Set this as the **VPS_HOST** secret in your repository settings." >> $GITHUB_STEP_SUMMARY
+
+      - name: Commit updated state
+        if: github.event.inputs.action == 'apply' || github.event.inputs.action == 'destroy'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add terraform.tfstate terraform.tfstate.backup 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "chore: update terraform state [skip ci]"
+          git push origin ${{ github.ref_name }}
+        working-directory: ${{ github.workspace }}

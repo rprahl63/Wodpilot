@@ -29,3 +29,10 @@ build/
 .vscode/
 *.swp
 *.swo
+
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/tfplan
+terraform/*.tfvars
+# terraform.tfstate is committed intentionally (local state backend)

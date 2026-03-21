@@ -1,0 +1,33 @@
+#cloud-config
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - ufw
+  - curl
+
+runcmd:
+  # Install Docker
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable docker
+  - systemctl start docker
+
+  # Install Docker Compose plugin
+  - apt-get install -y docker-compose-plugin
+
+  # Configure UFW
+  - ufw --force enable
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+
+  # Create app directory
+  - mkdir -p /opt/wodpilot/data
+
+  # Create Docker proxy network for Traefik
+  - docker network create proxy || true
+
+  # Create acme.json for Let's Encrypt (Traefik)
+  - touch /opt/wodpilot/data/acme.json
+  - chmod 600 /opt/wodpilot/data/acme.json
