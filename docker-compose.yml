@@ -33,6 +33,20 @@ services:
       - "traefik.http.services.wodpilot-web.loadbalancer.server.port=8080"
       - "traefik.docker.network=proxy"
 
+  pi-agent-service:
+    image: ghcr.io/${GITHUB_OWNER}/wodpilot-pi-agent:${IMAGE_TAG:-latest}
+    build:
+      context: ./pi-agent-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - PYTHON_API_URL=http://web:5000
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+    networks:
+      - internal
+    labels:
+      - "com.wodpilot.service=pi-agent"
+
   traefik:
     image: traefik:v3.2
     restart: unless-stopped

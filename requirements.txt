@@ -29,3 +29,4 @@ cryptography==43.0.3
 
 # Utils
 python-dotenv==1.0.1
+httpx>=0.27.0

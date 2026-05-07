@@ -71,6 +71,14 @@ class Config:
         default_factory=lambda: os.environ.get("DATA_DIR", "/data")
     )
 
+    # Pi-agent microservice
+    pi_agent_url: str = field(
+        default_factory=lambda: os.environ.get("PI_AGENT_URL", "http://pi-agent-service:3001")
+    )
+    internal_api_token: str = field(
+        default_factory=lambda: os.environ.get("INTERNAL_API_TOKEN", "")
+    )
+
 
 _config: Optional[Config] = None
 

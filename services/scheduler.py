@@ -61,7 +61,7 @@ async def job_wod_scrape() -> None:
 async def job_morning_briefing(app: "Application") -> None:
     """Send morning briefings to all opted-in users."""
     from db.client import get_db
-    from agent.coach import generate_morning_briefing
+    from services.pi_agent_client import generate_morning_briefing
 
     db = get_db()
     users = (

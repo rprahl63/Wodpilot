@@ -36,3 +36,7 @@ terraform/.terraform.lock.hcl
 terraform/tfplan
 terraform/*.tfvars
 # terraform.tfstate is committed intentionally (local state backend)
+
+# Node.js (pi-agent-service)
+pi-agent-service/node_modules/
+pi-agent-service/dist/

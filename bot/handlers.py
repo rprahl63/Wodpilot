@@ -52,7 +52,7 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     thinking_msg = await update.message.reply_text("⏳ Denke nach…")
 
     try:
-        from agent.coach import chat
+        from services.pi_agent_client import chat
         response = await chat(
             user_id=user["id"],
             user_name=user["full_name"] or user["username"] or "Athlet",
@@ -88,7 +88,7 @@ async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         image_bytes = bytes(await file.download_as_bytearray())
         caption = update.message.caption or ""
 
-        from agent.coach import analyze_image
+        from services.pi_agent_client import analyze_image
         response = await analyze_image(
             user_id=user["id"],
             user_name=user["full_name"] or "Athlet",
@@ -126,7 +126,7 @@ async def handle_video(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             tmp_path = tmp.name
 
         caption = update.message.caption or ""
-        from agent.coach import analyze_video
+        from services.pi_agent_client import analyze_video
         response = await analyze_video(
             user_id=user["id"],
             user_name=user["full_name"] or "Athlet",
@@ -223,7 +223,7 @@ async def cmd_briefing(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     msg = await update.message.reply_text("☀️ Erstelle dein Briefing…")
     try:
-        from agent.coach import generate_morning_briefing
+        from services.pi_agent_client import generate_morning_briefing
         response = await generate_morning_briefing(
             user_id=user["id"],
             user_name=user["full_name"] or "Athlet",

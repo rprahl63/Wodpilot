@@ -14,6 +14,7 @@ from flask import (
     Flask,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -264,5 +265,144 @@ def create_app() -> Flask:
     @app.route("/health")
     def health():
         return {"status": "ok", "service": "wodpilot-web"}, 200
+
+    # ─── Internal Tools API (called by pi-agent microservice) ─────────────────
+
+    def _require_internal_token():
+        """Return 401 if the request doesn't carry the internal API token."""
+        token = cfg.internal_api_token
+        if not token:
+            return None  # token check disabled – dev mode
+        auth = request.headers.get("Authorization", "")
+        if auth != f"Bearer {token}":
+            abort(401)
+
+    @app.route("/api/tools/training-load")
+    def tools_training_load():
+        _require_internal_token()
+        user_id = request.args.get("user_id", type=int)
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+        from services.garmin import get_training_load
+        load = get_training_load(user_id)
+        return jsonify({
+            "atl": load.atl,
+            "ctl": load.ctl,
+            "tsb": load.tsb,
+            "weekly_tss": load.weekly_tss,
+            "run_km_14d": load.run_km_14d,
+            "recommendation": load.recommendation,
+        })
+
+    @app.route("/api/tools/recent-activities")
+    def tools_recent_activities():
+        _require_internal_token()
+        user_id = request.args.get("user_id", type=int)
+        days = request.args.get("days", default=7, type=int)
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+        from services.garmin import get_recent_activities
+        activities = get_recent_activities(user_id, days=min(days, 30))
+        return jsonify(activities)
+
+    @app.route("/api/tools/wods")
+    def tools_wods():
+        _require_internal_token()
+        from services.scraper import get_todays_wods
+        wods = get_todays_wods()
+        if not wods:
+            return jsonify({"message": "Keine WODs für heute verfügbar. Generiere ein individuelles Workout."})
+        return jsonify(wods)
+
+    @app.route("/api/tools/search-memory", methods=["POST"])
+    def tools_search_memory():
+        _require_internal_token()
+        data = request.get_json() or {}
+        user_id = data.get("user_id")
+        query = data.get("query", "")
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+        from memory.semantic import search_memory
+        results = search_memory(user_id, query)
+        if not results:
+            return jsonify({"message": f"Keine Einträge zu '{query}' gefunden."})
+        return jsonify(results)
+
+    @app.route("/api/tools/search-episodes", methods=["POST"])
+    def tools_search_episodes():
+        _require_internal_token()
+        data = request.get_json() or {}
+        user_id = data.get("user_id")
+        query = data.get("query", "")
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+        from memory.episodic import search_episodes
+        results = search_episodes(user_id, query)
+        if not results:
+            return jsonify({"message": f"Keine Episoden zu '{query}' gefunden."})
+        return jsonify(results)
+
+    @app.route("/api/tools/prs")
+    def tools_prs():
+        _require_internal_token()
+        user_id = request.args.get("user_id", type=int)
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+        from memory.episodic import get_prs
+        prs = get_prs(user_id)
+        if not prs:
+            return jsonify({"message": "Noch keine PRs gespeichert."})
+        return jsonify(prs)
+
+    @app.route("/api/tools/save-memory", methods=["POST"])
+    def tools_save_memory():
+        _require_internal_token()
+        data = request.get_json() or {}
+        user_id = data.get("user_id")
+        key = data.get("key", "")
+        value = data.get("value", "")
+        category = data.get("category")
+        if not user_id or not key:
+            return jsonify({"error": "user_id, key required"}), 400
+        from memory.semantic import save_memory
+        save_memory(user_id, key, value, category)
+        return jsonify({"message": f"Gespeichert: {key} = {value}"})
+
+    @app.route("/api/tools/add-episode", methods=["POST"])
+    def tools_add_episode():
+        _require_internal_token()
+        data = request.get_json() or {}
+        user_id = data.get("user_id")
+        content = data.get("content", "")
+        category = data.get("category")
+        metadata = data.get("metadata")
+        if not user_id or not content:
+            return jsonify({"error": "user_id, content required"}), 400
+        from memory.episodic import add_episode
+        add_episode(user_id, content, category, metadata)
+        return jsonify({"message": f"Episode gespeichert: {content}"})
+
+    @app.route("/api/tools/coaching-profile")
+    def tools_coaching_profile():
+        _require_internal_token()
+        user_id = request.args.get("user_id", type=int)
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+        from memory.procedural import get_coaching_profile
+        profile = get_coaching_profile(user_id)
+        return jsonify(profile)
+
+    @app.route("/api/tools/update-coaching-style", methods=["POST"])
+    def tools_update_coaching_style():
+        _require_internal_token()
+        data = request.get_json() or {}
+        user_id = data.get("user_id")
+        coaching_style = data.get("coaching_style")
+        notes = data.get("notes")
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+        from memory.procedural import update_coaching_style
+        update_coaching_style(user_id, coaching_style=coaching_style, notes=notes)
+        return jsonify({"message": f"Coaching-Stil aktualisiert: {coaching_style or 'unverändert'}"})
 
     return app
