@@ -1,7 +1,9 @@
-name: CI/CD – Build & Deploy
+name: CI – Test & Build
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -89,89 +91,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ─── Deploy ────────────────────────────────────────────────────────────────
-  deploy:
-    name: Deploy to Hetzner VPS
-    runs-on: ubuntu-latest
-    needs: build
-    environment: production
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Write .env and deploy via SSH
-        uses: appleboy/ssh-action@v1.1.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          envs: TELEGRAM_TOKEN,ADMIN_TELEGRAM_ID,SUPABASE_URL,SUPABASE_SERVICE_KEY,ENCRYPTION_KEY,WEB_SECRET_KEY,WEB_ADMIN_PASSWORD,DOMAIN,ACME_EMAIL,OPENAI_API_KEY,DEFAULT_LLM_MODEL,MAX_API_CALLS_PER_DAY,GARMIN_SYNC_CRON,WOD_SCRAPE_CRON,MORNING_BRIEFING_CRON,INTERNAL_API_TOKEN
-          script: |
-            set -e
-            mkdir -p /opt/wodpilot
-            cd /opt/wodpilot
-
-            # Write .env from secrets (one echo per line avoids heredoc quoting issues)
-            {
-              echo "TELEGRAM_TOKEN=$TELEGRAM_TOKEN"
-              echo "ADMIN_TELEGRAM_ID=$ADMIN_TELEGRAM_ID"
-              echo "SUPABASE_URL=$SUPABASE_URL"
-              echo "SUPABASE_SERVICE_KEY=$SUPABASE_SERVICE_KEY"
-              echo "ENCRYPTION_KEY=$ENCRYPTION_KEY"
-              echo "WEB_SECRET_KEY=$WEB_SECRET_KEY"
-              echo "WEB_ADMIN_PASSWORD=$WEB_ADMIN_PASSWORD"
-              echo "DOMAIN=$DOMAIN"
-              echo "ACME_EMAIL=$ACME_EMAIL"
-              echo "OPENAI_API_KEY=$OPENAI_API_KEY"
-              echo "DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-claude-sonnet-4-20250514}"
-              echo "MAX_API_CALLS_PER_DAY=${MAX_API_CALLS_PER_DAY:-50}"
-              echo "GARMIN_SYNC_CRON=${GARMIN_SYNC_CRON:-0 5 * * *}"
-              echo "WOD_SCRAPE_CRON=${WOD_SCRAPE_CRON:-30 5 * * *}"
-              echo "MORNING_BRIEFING_CRON=${MORNING_BRIEFING_CRON:-0 7 * * *}"
-              echo "INTERNAL_API_TOKEN=$INTERNAL_API_TOKEN"
-              echo "GITHUB_OWNER=${{ github.repository_owner }}"
-            } > .env
-            chmod 600 .env
-
-            # Pull new images
-            echo "${{ secrets.GITHUB_TOKEN }}" | \
-              docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            export IMAGE_TAG=${{ github.sha }}
-            export GITHUB_OWNER=${{ github.repository_owner }}
-
-            docker compose pull
-
-            # Rolling restart: web first (Tools API), then pi-agent, then bot
-            docker compose up -d --no-deps web
-            sleep 5
-            docker compose up -d --no-deps pi-agent-service
-            sleep 5
-            docker compose up -d --no-deps bot
-
-            # Cleanup old images
-            docker image prune -f
-
-            echo "Deployment complete: $IMAGE_TAG"
-
-      - name: Notify admin on success
-        uses: appleboy/telegram-action@v1.0.0
-        if: success()
-        with:
-          to: ${{ secrets.ADMIN_TELEGRAM_ID }}
-          token: ${{ secrets.TELEGRAM_TOKEN }}
-          message: |
-            ✅ WODpilot deployed successfully!
-            Commit: `${{ github.sha }}`
-            By: ${{ github.actor }}
-
-      - name: Notify admin on failure
-        uses: appleboy/telegram-action@v1.0.0
-        if: failure()
-        with:
-          to: ${{ secrets.ADMIN_TELEGRAM_ID }}
-          token: ${{ secrets.TELEGRAM_TOKEN }}
-          message: |
-            ❌ WODpilot deployment FAILED!
-            Commit: `${{ github.sha }}`
-            Check: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  # NOTE: Deploy-Job entfernt – kein Hetzner VPS provisioniert.
+  # Wenn der VPS via terraform.yml provisioniert ist, kann die Deploy-Stage
+  # aus der Git-Historie wiederhergestellt werden (Commit 39e12ca).
