@@ -10,8 +10,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-import garminconnect  # type: ignore
-
 from db.client import get_db
 from services.training_load import DailyLoad, TrainingLoad, calculate_hr_tss, calculate_load
 from utils.crypto import decrypt
@@ -19,7 +17,9 @@ from utils.crypto import decrypt
 logger = logging.getLogger(__name__)
 
 
-def _get_garmin_client(garmin_email: str, garmin_password_enc: str) -> garminconnect.Garmin:
+def _get_garmin_client(garmin_email: str, garmin_password_enc: str):
+    """Lazy-import garminconnect so the module remains importable without it."""
+    import garminconnect  # type: ignore
     password = decrypt(garmin_password_enc)
     client = garminconnect.Garmin(garmin_email, password)
     client.login()
