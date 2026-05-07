@@ -112,6 +112,56 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # NOTE: Deploy-Job entfernt – kein Hetzner VPS provisioniert.
-  # Wenn der VPS via terraform.yml provisioniert ist, kann die Deploy-Stage
-  # aus der Git-Historie wiederhergestellt werden (Commit 39e12ca).
+  # ─── Deploy ────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+
+    steps:
+      - name: Write .env and deploy
+        uses: appleboy/ssh-action@v1
+        env:
+          DOT_ENV: |
+            TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
+            ADMIN_TELEGRAM_ID=${{ secrets.ADMIN_TELEGRAM_ID }}
+            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+            SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY }}
+            ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
+            WEB_SECRET_KEY=${{ secrets.WEB_SECRET_KEY }}
+            WEB_ADMIN_PASSWORD=${{ secrets.WEB_ADMIN_PASSWORD }}
+            DOMAIN=${{ secrets.DOMAIN }}
+            ACME_EMAIL=${{ secrets.ACME_EMAIL }}
+            INTERNAL_API_TOKEN=${{ secrets.INTERNAL_API_TOKEN }}
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            GITHUB_OWNER=${{ github.repository_owner }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: DOT_ENV
+          script: |
+            set -e
+            mkdir -p /opt/wodpilot
+            printf '%s\n' "$DOT_ENV" > /opt/wodpilot/.env
+
+            cd /opt/wodpilot
+
+            # Ensure proxy network exists (created by cloud-init, but just in case)
+            docker network create proxy 2>/dev/null || true
+
+            # Login to GHCR
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Fetch latest docker-compose.yml
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.yml \
+              -o docker-compose.yml
+
+            # Pull & start with the specific SHA tag
+            IMAGE_TAG=${{ github.sha }} docker compose pull
+            IMAGE_TAG=${{ github.sha }} docker compose up -d --remove-orphans
+
+            # Cleanup old images
+            docker image prune -f
