@@ -39,7 +39,6 @@ docker compose up --build pi-agent-service
 
 ```
 Wodpilot/
-├── agent/              # Veraltete Pydantic AI Dateien (werden entfernt)
 ├── bot/                # Telegram Bot Handler
 │   ├── handlers.py     # Post-Registrierungs-Handler (chat, photo, video, commands)
 │   └── registration.py # 6-stufiger Registrierungs-Flow (ConversationHandler)
