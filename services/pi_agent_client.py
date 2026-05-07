@@ -14,7 +14,7 @@ import httpx
 
 from config import get_config
 from db.client import get_db
-from memory.working import get_conversation_history, add_message
+from memory.working import add_message, get_conversation_history
 from utils.crypto import decrypt
 
 logger = logging.getLogger(__name__)
@@ -73,24 +73,7 @@ def _check_and_increment_rate_limit(user_id: int) -> None:
 
 def _build_history(user_id: int) -> list[dict[str, Any]]:
     """Fetch recent conversation history as a list of {role, content} dicts."""
-    messages = get_conversation_history(user_id)
-    result = []
-    for m in messages:
-        # Pydantic AI ModelMessage – extract role and text
-        role = getattr(m, "role", None) or (
-            "user" if m.__class__.__name__ in ("UserPromptPart", "ModelRequest") else "assistant"
-        )
-        # Try to extract plain text content
-        content = ""
-        if hasattr(m, "parts"):
-            for part in m.parts:
-                if hasattr(part, "content") and isinstance(part.content, str):
-                    content += part.content
-        elif hasattr(m, "content") and isinstance(m.content, str):
-            content = m.content
-        if content:
-            result.append({"role": role, "content": content})
-    return result
+    return get_conversation_history(user_id)
 
 
 async def chat(user_id: int, user_name: str, message: str) -> str:
