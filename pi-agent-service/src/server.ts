@@ -1,7 +1,8 @@
 import express, { type Request, type Response } from "express";
-import { completeSimple, getModel, registerBuiltInApiProviders } from "@mariozechner/pi-ai";
+import { completeSimple, registerBuiltInApiProviders } from "@mariozechner/pi-ai";
 import type { UserMessage } from "@mariozechner/pi-ai";
 import { buildAgent, runAgent, SYSTEM_PROMPT } from "./agent.js";
+import { buildRequestyModel, DEFAULT_MODEL, REQUESTY_BASE_URL } from "./requesty.js";
 import type {
   AgentResponse,
   AnalyzeRequest,
@@ -15,7 +16,6 @@ const app = express();
 app.use(express.json({ limit: "50mb" }));
 
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
 
 const BRIEFING_MESSAGE =
   "Erstelle ein morgendliches Briefing für heute. " +
@@ -33,7 +33,7 @@ app.post("/chat", async (req: Request, res: Response) => {
   }
 
   try {
-    const agent = buildAgent(user_id, api_key, model ?? DEFAULT_MODEL, history ?? []);
+    const agent = await buildAgent(user_id, api_key, model ?? DEFAULT_MODEL, history ?? []);
     const response = await runAgent(agent, message);
     res.json({ response } satisfies AgentResponse);
   } catch (err) {
@@ -54,7 +54,7 @@ app.post("/briefing", async (req: Request, res: Response) => {
   }
 
   try {
-    const agent = buildAgent(user_id, api_key, model ?? DEFAULT_MODEL, []);
+    const agent = await buildAgent(user_id, api_key, model ?? DEFAULT_MODEL, []);
     const response = await runAgent(agent, BRIEFING_MESSAGE);
     res.json({ response } satisfies AgentResponse);
   } catch (err) {
@@ -76,8 +76,7 @@ app.post("/analyze", async (req: Request, res: Response) => {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const llmModel = getModel("anthropic", (model ?? DEFAULT_MODEL) as any);
+    const llmModel = await buildRequestyModel(model ?? DEFAULT_MODEL, api_key);
     const prompt =
       message ||
       "Analysiere dieses Bild aus der Perspektive eines CrossFit Coaches. Gib konkretes Feedback.";
@@ -110,6 +109,43 @@ app.post("/analyze", async (req: Request, res: Response) => {
       error: String(err),
       response: "Bild-Analyse fehlgeschlagen.",
     } satisfies AgentResponse);
+  }
+});
+
+app.get("/models", async (req: Request, res: Response) => {
+  const apiKey = req.header("x-api-key");
+  if (!apiKey) {
+    res.status(400).json({ error: "x-api-key header required" });
+    return;
+  }
+
+  try {
+    const upstream = await fetch(`${REQUESTY_BASE_URL}/models`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!upstream.ok) {
+      res.status(upstream.status).json({ error: `Requesty: HTTP ${upstream.status}` });
+      return;
+    }
+
+    const body = (await upstream.json()) as { data: Record<string, unknown>[] };
+    // Only tool-capable models: the coach is useless without data access.
+    const models = body.data
+      .filter((m) => m.supports_tool_calling)
+      .map((m) => ({
+        id: m.id,
+        context_window: m.context_window,
+        input_price: m.input_price,
+        output_price: m.output_price,
+        supports_vision: m.supports_vision ?? false,
+        supports_reasoning: m.supports_reasoning ?? false,
+      }))
+      .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+    res.json({ models, default: DEFAULT_MODEL });
+  } catch (err) {
+    console.error("Model list error:", err);
+    res.status(502).json({ error: String(err) });
   }
 });
 

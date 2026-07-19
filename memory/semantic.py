@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def save_memory(user_id: int, key: str, value: str, category: Optional[str] = None) -> None:
     """Upsert a key-value fact into semantic memory."""
     db = get_db()
-    embedding = get_embedding(f"{key}: {value}")
+    embedding = get_embedding(f"{key}: {value}", user_id=user_id)
 
     db.table("coach_memory").upsert(
         {
@@ -35,7 +35,12 @@ def save_memory(user_id: int, key: str, value: str, category: Optional[str] = No
 def search_memory(user_id: int, query: str, limit: int = 5) -> List[Dict[str, Any]]:
     """Semantically search memory entries for a user."""
     db = get_db()
-    embedding = get_embedding(query)
+    embedding = get_embedding(query, user_id=user_id)
+
+    if embedding is None:
+        # No vector to compare against – go straight to the text fallback
+        # rather than asking the RPC to rank against nothing.
+        return _text_search(user_id, query, limit)
 
     try:
         # Use Supabase RPC for vector similarity search
@@ -49,16 +54,20 @@ def search_memory(user_id: int, query: str, limit: int = 5) -> List[Dict[str, An
         ).execute()
         return result.data or []
     except Exception:
-        # Fallback: simple text search without vector
-        rows = (
-            db.table("coach_memory")
-            .select("key,value,category")
-            .eq("user_id", user_id)
-            .ilike("value", f"%{query}%")
-            .limit(limit)
-            .execute()
-        ).data or []
-        return rows
+        return _text_search(user_id, query, limit)
+
+
+def _text_search(user_id: int, query: str, limit: int) -> List[Dict[str, Any]]:
+    """Substring fallback for when no usable embedding exists."""
+    return (
+        get_db()
+        .table("coach_memory")
+        .select("key,value,category")
+        .eq("user_id", user_id)
+        .ilike("value", f"%{query}%")
+        .limit(limit)
+        .execute()
+    ).data or []
 
 
 def get_all_memories(user_id: int) -> List[Dict[str, Any]]:

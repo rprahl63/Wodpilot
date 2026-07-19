@@ -20,6 +20,7 @@ from telegram.ext import (
     filters,
 )
 
+from config import get_config
 from db.client import get_db
 from utils.crypto import encrypt
 
@@ -150,9 +151,9 @@ async def receive_garmin_email(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     ctx.user_data["garmin_email"] = None
     await update.message.reply_text(
         "Garmin übersprungen.\n\n"
-        "Jetzt zum wichtigsten: dein *Anthropic API-Key*.\n"
-        "Hole ihn von https://console.anthropic.com/settings/keys\n\n"
-        "Format: `sk-ant-...`",
+        "Jetzt zum wichtigsten: dein *Requesty API-Key*.\n"
+        "Hole ihn von https://app.requesty.ai/api-keys\n\n"
+        "Format: `rqsty-sk-...`",
         parse_mode="Markdown",
     )
     return API_KEY
@@ -169,9 +170,9 @@ async def receive_garmin_pass(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     ctx.user_data["garmin_password"] = password
     await update.effective_chat.send_message(
         "✅ Garmin-Passwort gespeichert (verschlüsselt).\n\n"
-        "Jetzt dein *Anthropic API-Key*:\n"
-        "Hole ihn von https://console.anthropic.com/settings/keys\n\n"
-        "Format: `sk-ant-...`",
+        "Jetzt dein *Requesty API-Key*:\n"
+        "Hole ihn von https://app.requesty.ai/api-keys\n\n"
+        "Format: `rqsty-sk-...`",
         parse_mode="Markdown",
     )
     return API_KEY
@@ -185,9 +186,10 @@ async def receive_api_key(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     except Exception:
         pass
 
-    if not api_key.startswith("sk-ant-"):
+    if not api_key.startswith("rqsty-"):
         await update.effective_chat.send_message(
-            "❌ Das sieht nicht wie ein gültiger Anthropic API-Key aus (muss mit `sk-ant-` beginnen).\n"
+            "❌ Das sieht nicht wie ein gültiger Requesty API-Key aus (muss mit `rqsty-` beginnen).\n"
+            "Du findest ihn unter app.requesty.ai → API Keys.\n"
             "Versuche es erneut:",
             parse_mode="Markdown",
         )
@@ -197,9 +199,10 @@ async def receive_api_key(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     await update.effective_chat.send_message(
         "✅ API-Key gespeichert.\n\n"
         "Welches *Modell* möchtest du verwenden?\n"
-        "Standard: `claude-sonnet-4-20250514`\n"
-        "Alternativ: `claude-opus-4-20250514` (teurer, stärker)\n\n"
-        "Einfach Enter drücken für Standard oder Modell-Name eingeben:",
+        f"Standard: `{get_config().default_llm_model}`\n"
+        "Alternativ z.B. `anthropic/claude-opus-4-5` (teurer, stärker)\n\n"
+        "Die vollständige Auswahl gibt es im Dashboard. "
+        "Schick `-` für den Standard oder eine Requesty-Modell-ID:",
         parse_mode="Markdown",
     )
     return LLM_MODEL
@@ -207,7 +210,9 @@ async def receive_api_key(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
 
 async def receive_llm_model(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
-    model = text if text.startswith("claude-") else "claude-sonnet-4-20250514"
+    # Requesty model IDs are "provider/model"; anything else falls back to the
+    # configured default rather than silently setting an unroutable model.
+    model = text if "/" in text else get_config().default_llm_model
     ctx.user_data["llm_model"] = model
 
     return await _finalize_registration(update, ctx)

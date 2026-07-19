@@ -19,7 +19,7 @@ def add_episode(
 ) -> None:
     """Add an episodic memory entry."""
     db = get_db()
-    embedding = get_embedding(content)
+    embedding = get_embedding(content, user_id=user_id)
 
     db.table("memory_episodes").insert(
         {
@@ -36,7 +36,7 @@ def add_episode(
 def search_episodes(user_id: int, query: str, limit: int = 5) -> List[Dict[str, Any]]:
     """Semantically search episodic memory for a user."""
     db = get_db()
-    embedding = get_embedding(query)
+    embedding = get_embedding(query, user_id=user_id)
 
     try:
         result = db.rpc(

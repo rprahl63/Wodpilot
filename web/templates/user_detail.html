@@ -25,12 +25,20 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">LLM Modell</label>
-                        <input type="text" name="llm_model" class="form-control" value="{{ user.llm_model or 'claude-sonnet-4-20250514' }}">
+                        <label class="form-label">
+                            LLM Modell
+                            <small class="text-muted">(Requesty – nur Modelle mit Tool-Support)</small>
+                        </label>
+                        <select name="llm_model" id="llm-model" class="form-select">
+                            <option value="{{ user.llm_model or 'anthropic/claude-sonnet-4-5' }}" selected>
+                                {{ user.llm_model or 'anthropic/claude-sonnet-4-5' }}
+                            </option>
+                        </select>
+                        <div id="model-hint" class="form-text">Lade Modelle …</div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Neuer Anthropic API-Key <small class="text-muted">(leer lassen = unverändert)</small></label>
-                        <input type="password" name="llm_api_key" class="form-control" placeholder="sk-ant-...">
+                        <label class="form-label">Neuer Requesty API-Key <small class="text-muted">(leer lassen = unverändert)</small></label>
+                        <input type="password" name="llm_api_key" class="form-control" placeholder="rqsty-sk-...">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Timezone</label>
@@ -119,4 +127,60 @@
         </div>
     </div>
 </div>
+
+<script>
+// Populate the model picker from Requesty. The key stays server-side; this
+// only ever sees model IDs and pricing.
+(async () => {
+    const select  = document.getElementById('llm-model');
+    const hint    = document.getElementById('model-hint');
+    const current = select.value;
+
+    const price = (p) => p ? '$' + (p * 1e6).toFixed(2) + '/M' : '–';
+
+    try {
+        const res  = await fetch('/api/models/{{ user.id }}');
+        const data = await res.json();
+
+        if (!res.ok) {
+            hint.textContent = data.error || 'Modell-Liste nicht verfügbar.';
+            hint.className = 'form-text text-warning';
+            return;
+        }
+
+        select.innerHTML = '';
+        let matched = false;
+
+        for (const m of data.models) {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            const ctx = m.context_window ? (m.context_window / 1000).toFixed(0) + 'k' : '?';
+            const tags = [ctx + ' ctx', 'in ' + price(m.input_price), 'out ' + price(m.output_price)];
+            if (m.supports_vision) tags.push('vision');
+            if (m.supports_reasoning) tags.push('reasoning');
+            opt.textContent = m.id + '  —  ' + tags.join(' · ');
+            if (m.id === current) { opt.selected = true; matched = true; }
+            select.appendChild(opt);
+        }
+
+        // Keep a previously saved model selectable even if Requesty dropped it.
+        if (!matched && current) {
+            const opt = document.createElement('option');
+            opt.value = current;
+            opt.textContent = current + '  —  (nicht mehr im Katalog)';
+            opt.selected = true;
+            select.prepend(opt);
+            hint.textContent = data.models.length + ' Modelle · das gespeicherte Modell ist nicht mehr verfügbar';
+            hint.className = 'form-text text-warning';
+            return;
+        }
+
+        hint.textContent = data.models.length + ' Modelle mit Tool-Support verfügbar';
+        hint.className = 'form-text text-muted';
+    } catch (err) {
+        hint.textContent = 'Modell-Liste nicht abrufbar: ' + err.message;
+        hint.className = 'form-text text-warning';
+    }
+})();
+</script>
 {% endblock %}

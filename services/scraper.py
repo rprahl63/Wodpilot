@@ -29,13 +29,44 @@ _HEADERS = {
 }
 
 
+def _render_url(template: str, target_date: date) -> str:
+    """Substitute date placeholders in a source URL.
+
+    Sites like crossfit.com address their daily workout by date rather than
+    serving it from a stable path, so a source URL may carry placeholders:
+      {yymmdd}      -> 260719
+      {yyyy-mm-dd}  -> 2026-07-19
+      {yyyy} {mm} {dd}
+    """
+    # Plain replacement rather than str.format(): "-" is not a legal format
+    # field name, and a literal brace elsewhere in a URL would raise.
+    out = template
+    for token, value in (
+        ("{yyyy-mm-dd}", target_date.isoformat()),
+        ("{yyyymmdd}", target_date.strftime("%Y%m%d")),
+        ("{yymmdd}", target_date.strftime("%y%m%d")),
+        ("{yyyy}", target_date.strftime("%Y")),
+        ("{mm}", target_date.strftime("%m")),
+        ("{dd}", target_date.strftime("%d")),
+    ):
+        out = out.replace(token, value)
+    return out
+
+
+_DATE_TOKENS = ("{yyyy-mm-dd}", "{yyyymmdd}", "{yymmdd}", "{yyyy}", "{mm}", "{dd}")
+
+
+def _has_date_placeholder(template: str) -> bool:
+    return any(token in template for token in _DATE_TOKENS)
+
+
 def _fetch_wod(source: Dict[str, Any], target_date: date) -> Optional[str]:
     """
     Fetch the WOD from a single source.
     Returns the cleaned text content or None.
     """
-    url: str = source.get("url", "")
     selector: str = source.get("selector", ".wod")
+    url: str = _render_url(source.get("url", ""), target_date)
 
     try:
         resp = requests.get(url, headers=_HEADERS, timeout=_DEFAULT_TIMEOUT)
@@ -82,6 +113,19 @@ def scrape_all_wods(target_date: Optional[date] = None) -> int:
     count = 0
     for source in sources:
         name = source.get("name", source.get("url", "unknown"))
+
+        # A source whose URL carries no date placeholder always serves the
+        # current day. Backfilling a past date from it would file today's
+        # workout under the wrong date, so skip it instead.
+        url_template = source.get("url", "")
+        if target_date != date.today() and not _has_date_placeholder(url_template):
+            logger.info(
+                "Skipping %s for %s: static URL only ever serves today",
+                name,
+                target_date,
+            )
+            continue
+
         content = _fetch_wod(source, target_date)
         if not content:
             continue

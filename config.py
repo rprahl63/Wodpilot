@@ -34,9 +34,21 @@ class Config:
         default_factory=lambda: int(os.environ.get("WEB_PORT", "8080"))
     )
 
-    # OpenAI (embeddings only)
-    openai_api_key: Optional[str] = field(
-        default_factory=lambda: os.environ.get("OPENAI_API_KEY")
+    # Requesty router – chat models and embeddings both go through here.
+    requesty_base_url: str = field(
+        default_factory=lambda: os.environ.get(
+            "REQUESTY_BASE_URL", "https://router.requesty.ai/v1"
+        )
+    )
+    # Optional service-wide key. Embeddings normally use the per-user key
+    # (BYOK); this is only the fallback when no user context is available.
+    requesty_api_key: Optional[str] = field(
+        default_factory=lambda: os.environ.get("REQUESTY_API_KEY")
+    )
+    embedding_model: str = field(
+        default_factory=lambda: os.environ.get(
+            "EMBEDDING_MODEL", "openai/text-embedding-3-large"
+        )
     )
 
     # Scheduling (cron expressions)
@@ -53,7 +65,7 @@ class Config:
     # Defaults
     default_llm_model: str = field(
         default_factory=lambda: os.environ.get(
-            "DEFAULT_LLM_MODEL", "claude-sonnet-4-20250514"
+            "DEFAULT_LLM_MODEL", "anthropic/claude-sonnet-4-5"
         )
     )
     max_conversation_messages: int = 20

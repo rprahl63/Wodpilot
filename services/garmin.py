@@ -7,6 +7,7 @@ Credentials are stored encrypted in Supabase.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -17,13 +18,61 @@ from utils.crypto import decrypt
 logger = logging.getLogger(__name__)
 
 
-def _get_garmin_client(garmin_email: str, garmin_password_enc: str):
-    """Lazy-import garminconnect so the module remains importable without it."""
+def _token_dir(user_id: int) -> str:
+    """Per-user OAuth token cache, kept on the mounted data volume."""
+    from config import get_config
+
+    path = os.path.join(get_config().data_dir, "garmin_tokens", str(user_id))
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _get_garmin_client(user_id: int, garmin_email: str, garmin_password_enc: str):
+    """Lazy-import garminconnect so the module remains importable without it.
+
+    Tokens are cached per user. A full SSO login on every sync is what gets an
+    account rate-limited (HTTP 429) — with a tokenstore, garminconnect resumes
+    from cached OAuth tokens and only refreshes, which does not touch the
+    login endpoint at all.
+    """
     import garminconnect  # type: ignore
+
     password = decrypt(garmin_password_enc)
+    tokenstore = _token_dir(user_id)
+
+    # Deliberately NOT return_on_mfa=True: that turns every failure mode into
+    # an indistinguishable truthy return, so a rate limit gets misreported as
+    # "MFA required" and sends you chasing the wrong problem. Letting the
+    # library raise keeps the causes apart.
     client = garminconnect.Garmin(garmin_email, password)
-    client.login()
+
+    try:
+        client.login(tokenstore)
+    except garminconnect.GarminConnectTooManyRequestsError as exc:
+        raise RuntimeError(
+            "Garmin is rate-limiting this IP (HTTP 429). This is not a "
+            "credential problem. Every further attempt can extend the block — "
+            "wait several hours before retrying. Once a login succeeds, the "
+            f"token cache in {tokenstore} keeps later syncs off the login "
+            "endpoint entirely."
+        ) from exc
+
     return client
+
+
+def _as_int(value: Any) -> Optional[int]:
+    """Coerce a Garmin numeric to int, or None.
+
+    Garmin reports several nominally integral fields as floats ("maxHR": 149.0).
+    Postgres rejects those for an INT column, so every value bound to one has
+    to go through here — not just the ones that happened to fail once.
+    """
+    if value is None:
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def sync_user_activities(user_id: int) -> int:
@@ -43,7 +92,7 @@ def sync_user_activities(user_id: int) -> int:
 
     try:
         client = _get_garmin_client(
-            user_row["garmin_email"], user_row["garmin_password_enc"]
+            user_id, user_row["garmin_email"], user_row["garmin_password_enc"]
         )
     except Exception as exc:
         logger.error("Garmin login failed for user %s: %s", user_id, exc)
@@ -69,7 +118,7 @@ def sync_user_activities(user_id: int) -> int:
         except ValueError:
             continue
 
-        duration_s = int(act.get("duration", 0))
+        duration_s = _as_int(act.get("duration")) or 0
         hr_avg = act.get("averageHR") or act.get("maxHR")
         distance_m = act.get("distance", 0) or 0
         activity_type = (
@@ -77,11 +126,11 @@ def sync_user_activities(user_id: int) -> int:
             if isinstance(act.get("activityType"), dict)
             else str(act.get("activityType", "unknown"))
         )
-        calories = act.get("calories", 0) or 0
+        calories = _as_int(act.get("calories")) or 0
 
         tss = 0.0
         if hr_avg and duration_s:
-            tss = calculate_hr_tss(duration_s, int(hr_avg), hr_max)
+            tss = calculate_hr_tss(duration_s, _as_int(hr_avg), hr_max)
 
         record = {
             "user_id": user_id,
@@ -90,9 +139,9 @@ def sync_user_activities(user_id: int) -> int:
             "started_at": started_at.isoformat(),
             "duration_s": duration_s,
             "distance_m": float(distance_m),
-            "hr_avg": int(hr_avg) if hr_avg else None,
-            "hr_max": act.get("maxHR"),
-            "calories": int(calories),
+            "hr_avg": _as_int(hr_avg),
+            "hr_max": _as_int(act.get("maxHR")),
+            "calories": calories,
             "tss": round(tss, 2),
             "raw_json": act,
         }

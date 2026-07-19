@@ -1,7 +1,12 @@
 # Environment
+# ".env" matches only that exact name and "*.env" only names ending in .env,
+# so siblings like .env.generated slipped through and would have been
+# committed with every secret in them. Ignore the whole family instead and
+# allow the template back in explicitly.
 .env
-.env.local
+.env.*
 *.env
+!.env.example
 
 # Python
 __pycache__/

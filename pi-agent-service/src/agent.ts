@@ -1,5 +1,5 @@
 import { Agent } from "@mariozechner/pi-agent-core";
-import { getModel, registerBuiltInApiProviders } from "@mariozechner/pi-ai";
+import { registerBuiltInApiProviders } from "@mariozechner/pi-ai";
 import type {
   AssistantMessage,
   Message,
@@ -7,10 +7,15 @@ import type {
 } from "@mariozechner/pi-ai";
 import { createTools } from "./tools.js";
 import type { HistoryMessage } from "./types.js";
+import {
+  buildRequestyModel,
+  DEFAULT_MODEL,
+  REQUESTY_PROVIDER,
+} from "./requesty.js";
 
 registerBuiltInApiProviders();
 
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+export { DEFAULT_MODEL };
 
 export const SYSTEM_PROMPT = `Du bist WODpilot – ein KI-gestützter CrossFit Remote Coach.
 
@@ -36,16 +41,6 @@ Du kennst ihre Trainingsbelastung, Geschichte, PRs, Verletzungen und Ziele.
 - Strukturierte Listen für Workouts (Warm-Up, WOD, Cool-Down).
 - Emoji sparsam einsetzen.`;
 
-function getAnthropicModel(modelId: string) {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return getModel("anthropic", modelId as any);
-  } catch {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return getModel("anthropic", DEFAULT_MODEL as any);
-  }
-}
-
 function convertHistory(history: HistoryMessage[], modelId: string): Message[] {
   return history.map((msg, i): Message => {
     const ts = Date.now() - (history.length - i) * 1000;
@@ -55,8 +50,8 @@ function convertHistory(history: HistoryMessage[], modelId: string): Message[] {
     return {
       role: "assistant",
       content: [{ type: "text", text: msg.content }],
-      api: "anthropic-messages",
-      provider: "anthropic",
+      api: "openai-completions",
+      provider: REQUESTY_PROVIDER,
       model: modelId,
       usage: {
         input: 0,
@@ -72,13 +67,13 @@ function convertHistory(history: HistoryMessage[], modelId: string): Message[] {
   });
 }
 
-export function buildAgent(
+export async function buildAgent(
   userId: number,
   apiKey: string,
   modelName: string,
   history: HistoryMessage[] = []
-): Agent {
-  const model = getAnthropicModel(modelName || DEFAULT_MODEL);
+): Promise<Agent> {
+  const model = await buildRequestyModel(modelName || DEFAULT_MODEL, apiKey);
   const tools = createTools(userId);
   const messages = convertHistory(history, modelName || DEFAULT_MODEL);
 
@@ -96,7 +91,7 @@ export function buildAgent(
           (m as Message).role === "assistant" ||
           (m as Message).role === "toolResult"
       ),
-    getApiKey: (provider) => (provider === "anthropic" ? apiKey : undefined),
+    getApiKey: (provider) => (provider === REQUESTY_PROVIDER ? apiKey : undefined),
   });
 }
 

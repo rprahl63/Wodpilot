@@ -116,7 +116,7 @@ def create_app() -> Flask:
                 updates: dict[str, Any] = {
                     "hr_max": int(request.form.get("hr_max", 190) or 190),
                     "hr_rest": int(request.form.get("hr_rest", 55) or 55),
-                    "llm_model": request.form.get("llm_model", "claude-sonnet-4-20250514"),
+                    "llm_model": request.form.get("llm_model", "anthropic/claude-sonnet-4-5"),
                     "timezone": request.form.get("timezone", "Europe/Berlin"),
                     "briefing_enabled": request.form.get("briefing_enabled") == "on",
                 }
@@ -259,6 +259,114 @@ def create_app() -> Flask:
         asyncio.run(job_wod_scrape())
         flash("WOD-Scrape manuell ausgelöst.", "success")
         return redirect(url_for("dashboard"))
+
+    # ─── Model catalogue ──────────────────────────────────────────────────────
+
+    @app.route("/api/models/<int:user_id>")
+    @login_required
+    def api_models(user_id: int):
+        """Tool-capable Requesty models, for the picker on the user page.
+
+        The key is decrypted server-side and handed to pi-agent; it never
+        reaches the browser.
+        """
+        import httpx
+
+        row = (
+            get_db()
+            .table("users")
+            .select("llm_api_key_enc")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        ).data
+        if not row or not row.get("llm_api_key_enc"):
+            return jsonify({"error": "Für diesen Nutzer ist kein API-Key hinterlegt."}), 400
+
+        try:
+            api_key = decrypt(row["llm_api_key_enc"])
+        except Exception:
+            logger.exception("Could not decrypt API key for user %s", user_id)
+            return jsonify({"error": "API-Key nicht entschlüsselbar (ENCRYPTION_KEY geändert?)."}), 500
+
+        try:
+            resp = httpx.get(
+                f"{cfg.pi_agent_url}/models",
+                headers={"x-api-key": api_key},
+                timeout=20.0,
+            )
+            resp.raise_for_status()
+        except Exception as exc:
+            logger.warning("Model catalogue unavailable: %s", exc)
+            return jsonify({"error": f"Modell-Liste nicht abrufbar: {exc}"}), 502
+
+        return jsonify(resp.json())
+
+    # ─── Chat ─────────────────────────────────────────────────────────────────
+
+    def _chat_users() -> list[dict[str, Any]]:
+        """Users that can actually hold a conversation (i.e. have an LLM key)."""
+        rows = (
+            get_db()
+            .table("users")
+            .select("id,telegram_id,full_name,username,llm_api_key_enc,role")
+            .order("id")
+            .execute()
+        ).data or []
+        return [r for r in rows if r.get("llm_api_key_enc")]
+
+    @app.route("/chat")
+    @login_required
+    def chat_page():
+        from memory.working import get_conversation_history
+
+        users = _chat_users()
+        if not users:
+            return render_template("chat.html", users=[], user_id=None, history=[])
+
+        # Default to the admin's own record, else the first eligible user.
+        requested = request.args.get("user_id", type=int)
+        valid_ids = {u["id"] for u in users}
+        if requested in valid_ids:
+            user_id = requested
+        else:
+            admins = [u for u in users if u.get("role") == "admin"]
+            user_id = (admins or users)[0]["id"]
+
+        return render_template(
+            "chat.html",
+            users=users,
+            user_id=user_id,
+            history=get_conversation_history(user_id),
+        )
+
+    @app.route("/chat/send", methods=["POST"])
+    @login_required
+    def chat_send():
+        import asyncio
+        from services.pi_agent_client import chat as pi_chat
+
+        payload = request.get_json(silent=True) or {}
+        message = (payload.get("message") or "").strip()
+        user_id = payload.get("user_id")
+
+        if not message:
+            return jsonify({"error": "Leere Nachricht."}), 400
+        if user_id not in {u["id"] for u in _chat_users()}:
+            return jsonify({"error": "Unbekannter Nutzer."}), 400
+
+        user = next(u for u in _chat_users() if u["id"] == user_id)
+        user_name = user.get("full_name") or user.get("username") or "Athlet"
+
+        try:
+            reply = asyncio.run(pi_chat(user_id, user_name, message))
+        except Exception as exc:
+            # Rate limit and missing-key both surface as ValueError with a
+            # message meant for the user; anything else is a real failure.
+            logger.exception("Chat failed for user %s", user_id)
+            return jsonify({"error": str(exc)}), 502
+
+        return jsonify({"response": reply})
 
     # ─── Health check ─────────────────────────────────────────────────────────
 

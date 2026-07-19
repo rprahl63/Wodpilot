@@ -1,0 +1,150 @@
+# WODpilot – Synology DS218+ deployment.
+#
+# Differences to the upstream compose file:
+#   * No Traefik / no Let's Encrypt / no public port. The bot uses long polling,
+#     so nothing needs to be reachable from the internet.
+#   * Supabase Cloud is replaced by Postgres + PostgREST running locally.
+#   * The web UI binds to the NetBird IP only (see BIND_IP in .env).
+#   * PYTHON_API_URL points at port 8080, not 5000 — upstream has this wrong and
+#     it silently breaks every agent tool call.
+#
+# Memory limits are deliberate: this NAS is already under pressure, and a
+# runaway container here must not take Home Assistant or Immich down with it.
+
+name: wodpilot
+
+x-app-env: &app-env
+  SUPABASE_URL: http://rest:3000
+  SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+  PI_AGENT_URL: http://pi-agent:3001
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: wodpilot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wodpilot
+      POSTGRES_DB: wodpilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      AUTHENTICATOR_PASSWORD: ${AUTHENTICATOR_PASSWORD}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - effective_cache_size=192MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - max_connections=30
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wodpilot -d wodpilot"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 320m
+    networks: [wodpilot]
+
+  postgrest:
+    image: postgrest/postgrest:v12.2.3
+    container_name: wodpilot-postgrest
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD}@db:5432/wodpilot
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_POOL: "6"
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 128m
+    networks: [wodpilot]
+
+  # Rewrites /rest/v1/* -> /* so supabase-py can talk to plain PostgREST.
+  rest:
+    image: nginx:1.27-alpine
+    container_name: wodpilot-rest
+    restart: unless-stopped
+    volumes:
+      - ./rest-shim.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [postgrest]
+    mem_limit: 32m
+    networks: [wodpilot]
+
+  pi-agent:
+    build:
+      context: ../../pi-agent-service
+      dockerfile: Dockerfile
+    image: wodpilot-pi-agent:local
+    container_name: wodpilot-pi-agent
+    restart: unless-stopped
+    environment:
+      PORT: "3001"
+      # Upstream defaults this to http://web:5000, where nothing listens.
+      PYTHON_API_URL: http://web:8080
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
+      # LLM calls go through the Requesty router rather than straight to
+      # Anthropic, so the model is selectable per user in the dashboard.
+      REQUESTY_BASE_URL: ${REQUESTY_BASE_URL:-https://router.requesty.ai/v1}
+      DEFAULT_LLM_MODEL: ${DEFAULT_LLM_MODEL:-anthropic/claude-sonnet-4-5}
+    depends_on: [rest]
+    mem_limit: 256m
+    networks: [wodpilot]
+
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.web
+    image: wodpilot-web:local
+    container_name: wodpilot-web
+    restart: unless-stopped
+    env_file: .env
+    environment: *app-env
+    # One worker instead of upstream's two — RAM matters more than throughput
+    # for a single-digit user count. Threads cover concurrent chat requests.
+    # The long timeout is for LLM round-trips via pi-agent.
+    command:
+      - gunicorn
+      - --bind=0.0.0.0:8080
+      - --workers=1
+      - --threads=4
+      - --timeout=180
+      - web_main:app
+    volumes:
+      # Shared with the bot: the manual "Garmin sync" trigger runs here, and
+      # must read/write the same OAuth token cache as the scheduled job.
+      - ./data/bot:/data
+    ports:
+      # NetBird overlay only. Not reachable from the LAN.
+      - "${BIND_IP}:8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 384m
+    networks: [wodpilot]
+
+  bot:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.bot
+    image: wodpilot-bot:local
+    container_name: wodpilot-bot
+    restart: unless-stopped
+    env_file: .env
+    environment: *app-env
+    volumes:
+      - ./data/bot:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 384m
+    networks: [wodpilot]
+
+networks:
+  wodpilot:
+    driver: bridge
