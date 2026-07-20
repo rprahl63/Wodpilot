@@ -8,6 +8,7 @@ import asyncio
 import logging
 import sys
 
+from telegram import BotCommand
 from telegram.ext import Application, CallbackQueryHandler
 
 from bot.handlers import get_handlers, handle_delete_callback
@@ -21,6 +22,20 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
+
+# Shown in Telegram's "/" menu. Without this the commands still work when
+# typed, but nobody discovers them.
+BOT_COMMANDS = [
+    BotCommand("help", "Hilfe und Befehlsübersicht"),
+    BotCommand("dashboard", "Login-Link zu Wochenplan und Präferenzen"),
+    BotCommand("replan", "Woche neu planen"),
+    BotCommand("status", "Trainingsstatus (ATL/CTL/TSB)"),
+    BotCommand("wod", "Heutiges WOD"),
+    BotCommand("prs", "Deine Personal Records"),
+    BotCommand("briefing", "Morgendliches Briefing jetzt"),
+    BotCommand("settings", "Einstellungen"),
+    BotCommand("delete", "Account löschen (DSGVO)"),
+]
 
 
 async def run() -> None:
@@ -48,6 +63,11 @@ async def run() -> None:
 
     # Start polling
     await app.initialize()
+    try:
+        await app.bot.set_my_commands(BOT_COMMANDS)
+    except Exception as exc:
+        # Cosmetic only – never keep the bot from starting over this.
+        logger.warning("Could not publish command menu: %s", exc)
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
     logger.info("Bot is running. Press Ctrl+C to stop.")
