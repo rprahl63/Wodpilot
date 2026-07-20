@@ -67,29 +67,45 @@ Schema-Änderungen müssen von Hand per `psql` eingespielt werden.
 
 ## Update auf eine neue Version
 
+Auf dem NAS ist **kein Git installiert**, und dieses Verzeichnis ist kein Repo,
+sondern eine einfache Kopie. `git pull` gibt es hier nicht. Das GitHub-Repo ist
+öffentlich, also holt sich das NAS den Stand als Tarball.
+
 Reihenfolge ist wichtig: **erst das Schema, dann die Container.** Startet der
 neue Code gegen ein altes Schema, schlagen die Queries fehl.
 
 ```bash
-cd /volume1/docker/wodpilot
-git pull
+# 1. Branch holen (BRANCH anpassen)
+rm -rf /tmp/wp && mkdir -p /tmp/wp
+curl -fsSL https://codeload.github.com/rprahl63/Wodpilot/tar.gz/refs/heads/BRANCH \
+  | tar xz -C /tmp/wp --strip-components=1
 
-# 1. Neue Migrations einspielen (idempotent – alles CREATE ... IF NOT EXISTS)
-cd deploy/nas
-docker compose exec -T db psql -U wodpilot -d wodpilot \
-  < ../../db/migrations/003_training_plans.sql
+# 2. Ueberkopieren. Das Tarball enthaelt weder .env noch data/, beides bleibt
+#    unangetastet. sudo, weil die Dateien einem anderen Benutzer gehoeren.
+sudo cp -a /tmp/wp/. /volume1/docker/wodpilot/
 
-# 2. Images neu bauen und starten
-docker compose build
-docker compose up -d
+# 3. Neue Migrations einspielen (idempotent – alles CREATE ... IF NOT EXISTS)
+sudo /usr/local/bin/docker exec -i wodpilot-db psql -U wodpilot -d wodpilot \
+  < /volume1/docker/wodpilot/db/migrations/003_training_plans.sql
 
-# 3. Prüfen
-docker compose ps
-docker compose logs -f bot
+# 4. Images neu bauen und starten
+cd /volume1/docker/wodpilot/deploy/nas
+sudo /usr/local/bin/docker compose build
+sudo /usr/local/bin/docker compose up -d
+
+# 5. Prüfen
+sudo /usr/local/bin/docker compose ps
+sudo /usr/local/bin/docker compose logs -f bot
 ```
 
 Die Datei unter `initdb/35-003_training_plans.sql` ist nur für eine **Neu**-
 Installation da; auf einer bestehenden DB passiert dort nichts.
+
+⚠️ Niemals mit `--delete` synchronisieren: Unter `data/db` liegt die laufende
+Postgres-Datenbank, in `.env` die Secrets. Beides ist nicht im Repo.
+
+`sudo` ist für Docker nötig, und der volle Pfad `/usr/local/bin/docker` auch –
+`sudo` setzt den PATH zurück.
 
 ## Zugriff
 
