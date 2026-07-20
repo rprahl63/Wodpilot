@@ -93,10 +93,24 @@ cd /volume1/docker/wodpilot/deploy/nas
 sudo /usr/local/bin/docker compose build
 sudo /usr/local/bin/docker compose up -d
 
-# 5. Prüfen
+# 5. Nach jeder Migration: PostgREST-Schemacache neu laden
+sudo /usr/local/bin/docker restart wodpilot-postgrest
+
+# 6. Prüfen
 sudo /usr/local/bin/docker compose ps
+sudo /usr/local/bin/docker logs wodpilot-postgrest --tail 3
 sudo /usr/local/bin/docker compose logs -f bot
 ```
+
+**PostgREST cached das Schema.** Ohne den Neustart in Schritt 5 kennt es neue
+Tabellen nicht und die App bekommt 404 — obwohl die Migration sauber lief. Im
+Log muss die Relationszahl passen (`Schema cache loaded N Relations`); beim
+Update auf 003 stieg sie von 9 auf 13.
+
+**Grants:** `40-grants.sql` nutzt `ALTER DEFAULT PRIVILEGES`, was nur für
+Objekte derselben anlegenden Rolle gilt. Migrations deshalb immer mit
+`-U wodpilot` einspielen. Kontrolle: `\dp <tabelle>` muss `service_role=arwdDxt`
+zeigen, die zugehörige `_id_seq` `service_role=rwU`.
 
 Die Datei unter `initdb/35-003_training_plans.sql` ist nur für eine **Neu**-
 Installation da; auf einer bestehenden DB passiert dort nichts.

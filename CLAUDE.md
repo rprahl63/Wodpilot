@@ -63,7 +63,34 @@ sudo /usr/local/bin/docker exec -i wodpilot-db psql -U wodpilot -d wodpilot \
 cd /volume1/docker/wodpilot/deploy/nas
 sudo /usr/local/bin/docker compose build
 sudo /usr/local/bin/docker compose up -d
+
+# 5. Nach JEDER Migration: PostgREST cached das Schema und kennt neue
+#    Tabellen sonst nicht – die App liefe gegen 404.
+sudo /usr/local/bin/docker restart wodpilot-postgrest
+sudo /usr/local/bin/docker logs wodpilot-postgrest --tail 3   # "Schema cache loaded N Relations"
+
 sudo /usr/local/bin/docker compose logs -f bot
+```
+
+Zwei Dinge, die nach einer Migration erfahrungsgemäß schiefgehen:
+
+- **PostgREST-Schemacache** (siehe Schritt 5). Die Relationszahl im Log muss um
+  die Zahl der neuen Tabellen gestiegen sein.
+- **Rechte für `service_role`.** `initdb/40-grants.sql` setzt
+  `ALTER DEFAULT PRIVILEGES`, das aber nur für Objekte gilt, die von *derselben
+  Rolle* angelegt wurden. Migrations deshalb immer als `-U wodpilot` einspielen,
+  sonst fehlen die Grants. Prüfen mit `\dp <tabelle>` – dort muss
+  `service_role=arwdDxt` stehen, bei den `_id_seq`-Sequenzen `service_role=rwU`.
+
+### Wenn der web-Container nicht startet
+
+`bind: cannot assign requested address` heißt: Die NetBird-IP hat sich geändert.
+Aktuelle IP holen und `BIND_IP` in `deploy/nas/.env` anpassen, dann
+`docker compose up -d`. `DASHBOARD_BASE_URL` folgt automatisch, weil es im
+Compose aus `BIND_IP` abgeleitet wird.
+
+```bash
+sudo /usr/local/bin/docker exec netbird netbird status | grep "NetBird IP"
 ```
 
 **Reihenfolge ist wichtig: erst Schema, dann Container.** Der Bot fragt schon
