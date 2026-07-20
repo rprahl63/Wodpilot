@@ -4,23 +4,26 @@ Deployment ohne Hetzner, ohne Domain, ohne öffentlichen Port. Dashboard und Cha
 sind ausschließlich über NetBird erreichbar, der Telegram-Bot arbeitet per Long
 Polling und braucht daher keinen eingehenden Traffic.
 
-## Was hier anders ist als im Upstream-Repo
+## Was hier anders ist als im früheren VPS-Setup
 
-| Upstream (VPS) | Hier (NAS) |
+Der Hetzner-Pfad (Terraform, Traefik, GHCR, GitHub-Actions-Deploy) ist aus dem
+Repo entfernt. Die Tabelle erklärt, warum dieses Setup so aussieht, wie es
+aussieht — die genannten VPS-Dateien existieren nicht mehr.
+
+| Früher (VPS) | Hier (NAS) |
 |---|---|
 | Traefik + Let's Encrypt + `DOMAIN` | entfällt — kein öffentlicher Entrypoint |
 | Supabase Cloud | Postgres + PostgREST lokal |
 | Images von ghcr.io | lokal gebaut |
-| `PYTHON_API_URL=http://web:5000` | `http://web:8080` — **Upstream-Bug**, siehe unten |
 | gunicorn `--workers 2` | `--workers 1 --threads 4` (RAM) |
 
-### Der Upstream-Bug
+### Der Port-Bug
 
-`docker-compose.yml` und `pi-agent-service/src/tools.ts:4` zeigen beide auf Port
-5000, aber die Web-App lauscht auf 8080 (`config.py:34`, `Dockerfile.web`). Damit
-laufen im Upstream **alle Agent-Tool-Aufrufe** ins Leere: Der Bot antwortet, hat
-aber keinen Zugriff auf Trainingsdaten, WODs, PRs oder Memory. Hier korrigiert.
-Für einen Upstream-Fix müsste der Default in `tools.ts` mitgeändert werden.
+`PYTHON_API_URL` zeigte auf Port 5000, die Web-App lauscht aber auf 8080
+(`config.py`, `Dockerfile.web`). Damit liefen **alle Agent-Tool-Aufrufe** ins
+Leere: Der Bot antwortete, hatte aber keinen Zugriff auf Trainingsdaten, WODs,
+PRs oder Memory. Inzwischen an beiden Stellen behoben — hier im Compose und im
+Default von `pi-agent-service/src/tools.ts`.
 
 ## Warum Postgres + PostgREST statt Supabase
 
