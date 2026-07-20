@@ -82,10 +82,10 @@ async def job_morning_briefing(app: "Application") -> None:
         try:
             name = u.get("full_name") or u.get("username") or "Athlet"
             briefing = await generate_morning_briefing(u["id"], name)
-            await app.bot.send_message(
-                chat_id=u["telegram_id"],
-                text=f"☀️ *Morgendliches Briefing*\n\n{briefing[:4000]}",
-                parse_mode="Markdown",
+            from utils.telegram import send_safe
+            await send_safe(
+                lambda t, **kw: app.bot.send_message(chat_id=u["telegram_id"], text=t, **kw),
+                f"☀️ *Morgendliches Briefing*\n\n{briefing[:4000]}",
             )
         except Exception as exc:
             logger.error("Morning briefing failed for user %s: %s", u["id"], exc)
@@ -158,10 +158,10 @@ async def job_weekly_plan_fallback(app: "Application") -> None:
                 user["id"], name, constraints=None, plan_id=plan["id"],
                 week_start=str(plan["week_start"]),
             )
-            await app.bot.send_message(
-                chat_id=user["telegram_id"],
-                text=f"🗓️ *Deine Woche*\n\n{summary[:4000]}",
-                parse_mode="Markdown",
+            from utils.telegram import send_safe
+            await send_safe(
+                lambda t, **kw: app.bot.send_message(chat_id=user["telegram_id"], text=t, **kw),
+                f"🗓️ *Deine Woche*\n\n{summary[:4000]}",
             )
         except Exception as exc:
             logger.error("Fallback planning failed for plan %s: %s", plan["id"], exc)

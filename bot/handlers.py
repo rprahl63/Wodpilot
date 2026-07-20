@@ -150,7 +150,9 @@ async def handle_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     # Echo the transcript so a mis-heard message is obvious to the athlete.
-    await update.message.reply_text(f"🎙️ _{text}_", parse_mode="Markdown")
+    # Spoken text can contain anything, so never let markup break the send.
+    from utils.telegram import send_safe
+    await send_safe(update.message.reply_text, f"🎙️ _{text}_")
     await _process_text(update, user, text)
 
 
@@ -279,7 +281,8 @@ async def cmd_prs(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     lines = ["🏆 *Deine Personal Records*\n"]
     for pr in prs[:20]:
         lines.append(f"• {pr['content']}")
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    from utils.telegram import send_safe
+    await send_safe(update.message.reply_text, "\n".join(lines))
 
 
 async def cmd_wod(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -297,7 +300,8 @@ async def cmd_wod(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     lines = ["📋 *Heutige WODs*\n"]
     for w in wods:
         lines.append(f"*{w['source']}*\n{w['content'][:500]}\n")
-    await msg.edit_text("\n".join(lines)[:4096], parse_mode="Markdown")
+    from utils.telegram import send_safe
+    await send_safe(msg.edit_text, "\n".join(lines)[:4096])
 
 
 async def cmd_briefing(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -356,13 +360,15 @@ async def cmd_dashboard(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("❌ Login-Link konnte nicht erstellt werden.")
         return
 
+    # Deliberately no parse_mode: token_urlsafe() emits "_" and "-", and a lone
+    # underscore makes Telegram reject the whole message as broken Markdown.
+    # Telegram links bare URLs by itself, so nothing is lost.
     await update.message.reply_text(
-        "🔗 *Dein Dashboard*\n\n"
+        "🔗 Dein Dashboard\n\n"
         f"{cfg.dashboard_base_url}/me/auth/{token}\n\n"
         f"Der Link ist {cfg.login_token_ttl_minutes} Minuten gültig und nur einmal nutzbar.\n"
         "Dort siehst du deinen Wochenplan, trägst Ergebnisse ein und pflegst deine "
         "Trainingspräferenzen.",
-        parse_mode="Markdown",
         disable_web_page_preview=True,
     )
 
