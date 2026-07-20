@@ -29,6 +29,15 @@ export interface AnalyzeRequest {
   model?: string;
 }
 
+export interface PlanWeekRequest {
+  user_id: number;
+  user_name?: string;
+  api_key: string;
+  model?: string;
+  constraints?: string;
+  week_start: string; // ISO date, the Monday of the week to plan
+}
+
 export interface AgentResponse {
   response: string;
   error?: string;

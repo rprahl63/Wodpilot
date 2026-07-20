@@ -231,7 +231,13 @@ def create_app() -> Flask:
             except json.JSONDecodeError:
                 flash("Ungültiges JSON für WOD-Quellen.", "danger")
 
-            for key in ["garmin_sync_cron", "wod_scrape_cron", "morning_briefing_cron"]:
+            for key in [
+                "garmin_sync_cron",
+                "wod_scrape_cron",
+                "morning_briefing_cron",
+                "weekly_plan_ask_cron",
+                "weekly_plan_fallback_cron",
+            ]:
                 val = request.form.get(key, "").strip()
                 if val:
                     db.table("config").upsert({"key": key, "value": val}).execute()
@@ -512,5 +518,93 @@ def create_app() -> Flask:
         from memory.procedural import update_coaching_style
         update_coaching_style(user_id, coaching_style=coaching_style, notes=notes)
         return jsonify({"message": f"Coaching-Stil aktualisiert: {coaching_style or 'unverändert'}"})
+
+    @app.route("/api/tools/training-preferences", methods=["GET", "POST"])
+    def tools_training_preferences():
+        _require_internal_token()
+        from services.planning import get_preferences, save_preferences
+
+        if request.method == "POST":
+            data = request.get_json() or {}
+            user_id = data.get("user_id")
+            text = (data.get("preferences_text") or "").strip()
+            if not user_id or not text:
+                return jsonify({"error": "user_id, preferences_text required"}), 400
+            save_preferences(user_id, text)
+            return jsonify({"message": "Trainingspräferenzen gespeichert."})
+
+        user_id = request.args.get("user_id", type=int)
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+        text = get_preferences(user_id)
+        if not text:
+            return jsonify({"message": "Noch keine Präferenzen hinterlegt."})
+        return jsonify({"preferences_text": text})
+
+    @app.route("/api/tools/week-plan", methods=["GET", "POST"])
+    def tools_week_plan():
+        _require_internal_token()
+        from services.planning import current_week_start, get_week_plan, save_week_plan
+
+        if request.method == "POST":
+            data = request.get_json() or {}
+            user_id = data.get("user_id")
+            week_start = data.get("week_start")
+            sessions = data.get("sessions")
+            if not user_id or not week_start:
+                return jsonify({"error": "user_id, week_start required"}), 400
+            if not isinstance(sessions, list) or not sessions:
+                return jsonify({"error": "sessions must be a non-empty list"}), 400
+            for s in sessions:
+                if not all(s.get(k) for k in ("date", "title", "description")):
+                    return jsonify({"error": "each session needs date, title, description"}), 400
+            count = save_week_plan(user_id, week_start, sessions)
+            return jsonify({"message": f"Wochenplan gespeichert: {count} Einheiten ab {week_start}."})
+
+        user_id = request.args.get("user_id", type=int)
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+        week_start = request.args.get("week_start") or current_week_start().isoformat()
+        plan = get_week_plan(user_id, week_start)
+        if not plan:
+            return jsonify({"message": f"Kein Wochenplan für die Woche ab {week_start} vorhanden."})
+        return jsonify(plan)
+
+    @app.route("/api/tools/session-result", methods=["POST"])
+    def tools_session_result():
+        _require_internal_token()
+        from services.planning import log_session_result
+
+        data = request.get_json() or {}
+        user_id = data.get("user_id")
+        session_id = data.get("session_id")
+        session_date = data.get("date")
+        status = data.get("status", "done")
+        rpe = data.get("rpe")
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+        if not session_id and not session_date:
+            return jsonify({"error": "session_id or date required"}), 400
+        if status not in ("done", "skipped"):
+            return jsonify({"error": "status must be 'done' or 'skipped'"}), 400
+        if rpe is not None and not (isinstance(rpe, int) and 1 <= rpe <= 10):
+            return jsonify({"error": "rpe must be an integer 1-10"}), 400
+        result = log_session_result(
+            user_id,
+            session_id=session_id,
+            session_date=session_date,
+            status=status,
+            result_text=data.get("result_text"),
+            rpe=rpe,
+            notes=data.get("notes"),
+        )
+        if result is None:
+            return jsonify({"message": "Keine passende Einheit gefunden. Erst get_week_plan aufrufen und die Session-ID nutzen."})
+        return jsonify({"message": f"Ergebnis gespeichert für '{result['title']}' am {result['date']}."})
+
+    # ─── Athlete dashboard (magic-link auth, /me/...) ─────────────────────────
+
+    from web.athlete import athlete_bp
+    app.register_blueprint(athlete_bp)
 
     return app

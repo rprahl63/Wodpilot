@@ -240,3 +240,97 @@ def test_generate_morning_briefing_calls_briefing_endpoint(monkeypatch):
 
     assert result == "Briefing für heute..."
     assert mock_client.post.call_args.args[0] == "http://test-pi-agent:3001/briefing"
+
+
+# ─── generate_week_plan() ─────────────────────────────────────────────────────
+
+def _week_plan_setup(monkeypatch, agent_response: str = "Mo: Intervalle…"):
+    """Common mocks for generate_week_plan tests; returns (db, httpx client)."""
+    _mock_env(monkeypatch)
+    from utils.crypto import encrypt
+    mock_db = _mock_db_with_user(api_key_enc=encrypt("sk-ant-key"))
+    mock_client, _ = _build_async_httpx_mock({"response": agent_response})
+    return mock_db, mock_client
+
+
+def test_generate_week_plan_posts_constraints_and_week(monkeypatch):
+    """generate_week_plan() should POST to /plan-week with constraints."""
+    mock_db, mock_client = _week_plan_setup(monkeypatch)
+    stored_plan = {"id": 11, "sessions": [{"id": 101, "title": "Intervalle"}]}
+
+    with patch("services.pi_agent_client.get_db", return_value=mock_db), \
+         patch("services.pi_agent_client.httpx.AsyncClient", return_value=mock_client), \
+         patch("services.pi_agent_client.add_message"), \
+         patch("services.planning.get_week_plan", return_value=stored_plan):
+        from services.pi_agent_client import generate_week_plan
+        result = asyncio.run(
+            generate_week_plan(
+                7, "René", constraints="Mittwoch keine Zeit",
+                plan_id=11, week_start="2026-07-27",
+            )
+        )
+
+    assert result == "Mo: Intervalle…"
+    assert mock_client.post.call_args.args[0] == "http://test-pi-agent:3001/plan-week"
+    payload = mock_client.post.call_args.kwargs["json"]
+    assert payload["user_id"] == 7
+    assert payload["constraints"] == "Mittwoch keine Zeit"
+    assert payload["week_start"] == "2026-07-27"
+
+
+def test_generate_week_plan_defaults_to_upcoming_week(monkeypatch):
+    """Without an explicit week_start the upcoming Monday is planned."""
+    mock_db, mock_client = _week_plan_setup(monkeypatch)
+
+    with patch("services.pi_agent_client.get_db", return_value=mock_db), \
+         patch("services.pi_agent_client.httpx.AsyncClient", return_value=mock_client), \
+         patch("services.pi_agent_client.add_message"), \
+         patch("services.planning.get_week_plan", return_value={"sessions": [{"id": 1}]}):
+        from services.pi_agent_client import generate_week_plan
+        asyncio.run(generate_week_plan(7, "René"))
+
+    from services.planning import upcoming_week_start
+    payload = mock_client.post.call_args.kwargs["json"]
+    assert payload["week_start"] == upcoming_week_start().isoformat()
+
+
+def test_generate_week_plan_reports_failure_when_nothing_stored(monkeypatch):
+    """A chatty answer without stored sessions must be reported as a failure."""
+    mock_db, mock_client = _week_plan_setup(monkeypatch, "Klar, mach ich gleich!")
+
+    with patch("services.pi_agent_client.get_db", return_value=mock_db), \
+         patch("services.pi_agent_client.httpx.AsyncClient", return_value=mock_client), \
+         patch("services.pi_agent_client.add_message"), \
+         patch("services.planning.get_week_plan", return_value=None), \
+         patch("services.planning.set_plan_failed") as mock_failed:
+        from services.pi_agent_client import generate_week_plan
+        result = asyncio.run(
+            generate_week_plan(7, "René", plan_id=11, week_start="2026-07-27")
+        )
+
+    assert "nicht geklappt" in result
+    mock_failed.assert_called_once_with(11)
+
+
+def test_generate_week_plan_marks_failed_on_http_error(monkeypatch):
+    """A failing agent call marks the plan failed and re-raises."""
+    _mock_env(monkeypatch)
+    from utils.crypto import encrypt
+    mock_db = _mock_db_with_user(api_key_enc=encrypt("sk-ant-key"))
+
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(side_effect=RuntimeError("boom"))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("services.pi_agent_client.get_db", return_value=mock_db), \
+         patch("services.pi_agent_client.httpx.AsyncClient", return_value=mock_client), \
+         patch("services.pi_agent_client.add_message"), \
+         patch("services.planning.set_plan_failed") as mock_failed:
+        from services.pi_agent_client import generate_week_plan
+        with pytest.raises(RuntimeError, match="boom"):
+            asyncio.run(
+                generate_week_plan(7, "René", plan_id=11, week_start="2026-07-27")
+            )
+
+    mock_failed.assert_called_once_with(11)

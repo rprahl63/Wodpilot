@@ -201,3 +201,64 @@ async def generate_morning_briefing(user_id: int, user_name: str) -> str:
     response = data.get("response", "Briefing fehlgeschlagen.")
     add_message(user_id, "assistant", response)
     return response
+
+
+async def generate_week_plan(
+    user_id: int,
+    user_name: str,
+    constraints: str | None = None,
+    plan_id: int | None = None,
+    week_start: str | None = None,
+) -> str:
+    """
+    Plan the training week via the pi-agent service.
+
+    The caller must have claimed the plan row (see planning.claim_planning) so
+    that a user reply and the fallback job can never plan the same week twice.
+    The agent persists the sessions itself through the save_week_plan tool;
+    afterwards we verify that sessions actually landed in the database, so a
+    chatty answer without a stored plan is reported as a failure instead of
+    silently leaving the week empty.
+    """
+    from services.planning import get_week_plan, set_plan_failed, upcoming_week_start
+
+    ws = week_start or upcoming_week_start().isoformat()
+
+    _check_and_increment_rate_limit(user_id)
+    api_key, model = _get_user_api_key(user_id)
+
+    cfg = get_config()
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                f"{cfg.pi_agent_url}/plan-week",
+                json={
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "api_key": api_key,
+                    "model": model,
+                    "constraints": constraints,
+                    "week_start": ws,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception:
+        logger.exception("Week planning failed for user %s", user_id)
+        if plan_id is not None:
+            set_plan_failed(plan_id)
+        raise
+
+    plan = get_week_plan(user_id, ws)
+    if not plan or not plan.get("sessions"):
+        logger.error("Agent returned without storing sessions for user %s", user_id)
+        if plan_id is not None:
+            set_plan_failed(plan_id)
+        return (
+            "Die Wochenplanung hat leider nicht geklappt – es wurden keine Einheiten "
+            "gespeichert. Schreib mir kurz, dann versuche ich es nochmal."
+        )
+
+    response = data.get("response", "Wochenplan erstellt.")
+    add_message(user_id, "assistant", response)
+    return response

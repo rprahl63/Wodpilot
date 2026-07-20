@@ -17,6 +17,10 @@ x-app-env: &app-env
   SUPABASE_URL: http://rest:3000
   SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
   PI_AGENT_URL: http://pi-agent:3001
+  # Base URL for the magic links the bot sends for the athlete dashboard.
+  # Derived from BIND_IP so it follows the NetBird address automatically —
+  # a stale value here would mail out links that lead nowhere.
+  DASHBOARD_BASE_URL: ${DASHBOARD_BASE_URL:-http://${BIND_IP}:8080}
 
 services:
   db:

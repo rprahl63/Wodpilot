@@ -1,0 +1,116 @@
+{% extends "athlete_base.html" %}
+{% block title %}Wochenplan – WODpilot{% endblock %}
+
+{% set type_labels = {
+    'intervals': 'Intervalle', 'run': 'Lauf', 'strength': 'Kraft',
+    'wod': 'WOD', 'mobility': 'Mobility', 'rest': 'Ruhetag'
+} %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1">Woche ab {{ week_start.strftime('%d.%m.%Y') }}</h4>
+        <div class="muted small">
+            {% if plan and plan.status == 'planned' %}
+                {{ plan.sessions|length }} Einheiten geplant
+                {% if plan.constraints_text %}· mit deinen Vorgaben{% endif %}
+            {% elif plan and plan.status == 'asked' %}
+                Warte noch auf deine Rückmeldung im Telegram-Chat
+            {% elif plan and plan.status == 'planning' %}
+                Plan wird gerade erstellt…
+            {% elif plan and plan.status == 'failed' %}
+                Planung fehlgeschlagen – schreib dem Coach kurz im Chat
+            {% else %}
+                Noch kein Plan für diese Woche
+            {% endif %}
+        </div>
+    </div>
+    <div class="btn-group">
+        <a href="{{ url_for('athlete.week', week=prev_week.isoformat()) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-chevron-left"></i>
+        </a>
+        <a href="{{ url_for('athlete.week', week=next_week.isoformat()) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-chevron-right"></i>
+        </a>
+    </div>
+</div>
+
+{% for day in days %}
+<div class="card mb-3 {% if day.date == today %}day-today{% endif %}">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-baseline mb-2">
+            <h6 class="mb-0">
+                {{ day.label }}, {{ day.date.strftime('%d.%m.') }}
+                {% if day.date == today %}<span class="badge bg-primary ms-1">heute</span>{% endif %}
+            </h6>
+        </div>
+
+        {% if not day.sessions %}
+        <div class="muted small">Kein Training geplant.</div>
+        {% endif %}
+
+        {% for s in day.sessions %}
+        <div class="{% if not loop.first %}mt-4 pt-3 border-top border-secondary{% endif %}">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong>{{ s.title }}</strong>
+                <div>
+                    {% if s.session_type %}
+                    <span class="badge bg-secondary">{{ type_labels.get(s.session_type, s.session_type) }}</span>
+                    {% endif %}
+                    {% if s.status == 'done' %}<span class="badge bg-success">erledigt</span>
+                    {% elif s.status == 'skipped' %}<span class="badge bg-secondary">ausgefallen</span>{% endif %}
+                </div>
+            </div>
+
+            <div class="session-desc mb-2">{{ s.description }}</div>
+
+            {% if s.status != 'planned' %}
+            <div class="small muted border-start border-secondary ps-3 mb-2">
+                {% if s.result_text %}<div>{{ s.result_text }}</div>{% endif %}
+                {% if s.rpe %}<div>RPE {{ s.rpe }}/10</div>{% endif %}
+                {% if s.result_notes %}<div>{{ s.result_notes }}</div>{% endif %}
+            </div>
+            {% endif %}
+
+            <a class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse"
+               href="#result-{{ s.id }}" role="button">
+                <i class="bi bi-pencil"></i>
+                {% if s.status == 'planned' %}Ergebnis eintragen{% else %}Ergebnis bearbeiten{% endif %}
+            </a>
+
+            <div class="collapse mt-3" id="result-{{ s.id }}">
+                <form method="post" action="{{ url_for('athlete.session_result', session_id=s.id) }}">
+                    <input type="hidden" name="week" value="{{ week_start.isoformat() }}">
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label small">Status</label>
+                            <select name="status" class="form-select form-select-sm">
+                                <option value="done" {% if s.status == 'done' %}selected{% endif %}>Erledigt</option>
+                                <option value="skipped" {% if s.status == 'skipped' %}selected{% endif %}>Ausgefallen</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">RPE (1–10)</label>
+                            <input type="number" name="rpe" min="1" max="10"
+                                   class="form-control form-control-sm" value="{{ s.rpe or '' }}">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">Ergebnis</label>
+                            <textarea name="result_text" rows="2" class="form-control form-control-sm"
+                                      placeholder="z. B. 6x400m, Schnitt 1:31">{{ s.result_text or '' }}</textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">Notizen</label>
+                            <textarea name="result_notes" rows="2" class="form-control form-control-sm"
+                                      placeholder="Wie hat es sich angefühlt?">{{ s.result_notes or '' }}</textarea>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary mt-3">Speichern</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

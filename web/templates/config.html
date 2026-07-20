@@ -33,6 +33,16 @@
                     <input type="text" name="morning_briefing_cron" class="form-control font-monospace"
                            value="{{ config.get('morning_briefing_cron', '0 7 * * *') }}" placeholder="0 7 * * *">
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label">Wochenplanung – Frage</label>
+                    <input type="text" name="weekly_plan_ask_cron" class="form-control font-monospace"
+                           value="{{ config.get('weekly_plan_ask_cron', '0 10 * * sun') }}" placeholder="0 10 * * sun">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Wochenplanung – Fallback</label>
+                    <input type="text" name="weekly_plan_fallback_cron" class="form-control font-monospace"
+                           value="{{ config.get('weekly_plan_fallback_cron', '0 18 * * sun') }}" placeholder="0 18 * * sun">
+                </div>
             </div>
 
             <button type="submit" class="btn btn-primary">Speichern</button>

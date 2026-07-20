@@ -8,6 +8,7 @@ import type {
   AnalyzeRequest,
   BriefingRequest,
   ChatRequest,
+  PlanWeekRequest,
 } from "./types.js";
 
 registerBuiltInApiProviders();
@@ -62,6 +63,46 @@ app.post("/briefing", async (req: Request, res: Response) => {
     res.status(500).json({
       error: String(err),
       response: "Briefing fehlgeschlagen.",
+    } satisfies AgentResponse);
+  }
+});
+
+function planWeekMessage(weekStart: string, constraints?: string): string {
+  const constraintBlock = constraints
+    ? `\n\nDer Athlet hat für diese Woche mitgeteilt:\n"${constraints}"\nBerücksichtige das verbindlich – verschiebe oder streiche Einheiten entsprechend.`
+    : "\n\nDer Athlet hat keine Rückmeldung gegeben. Plane allein anhand seiner Präferenzen und Trainingsdaten.";
+
+  return (
+    `Plane die Trainingswoche ab Montag, ${weekStart}.\n\n` +
+    "Vorgehen:\n" +
+    "1. Hole get_training_preferences für den gewünschten Wochenrhythmus.\n" +
+    "2. Hole get_training_load und get_recent_activities (14 Tage), um die Belastung einzuschätzen.\n" +
+    "3. Durchsuche das Memory nach Verletzungen und Zielen, die die Planung beeinflussen.\n" +
+    constraintBlock +
+    "\n\nSchreibe jede Einheit vollständig aus, so dass sie ohne Rückfrage ausführbar ist: " +
+    "Warm-Up, Hauptteil mit konkreten Sätzen/Wiederholungen/Pace/Pausen (z. B. '6x400m @ 5k-Pace, 90s Pause'), Cool-Down.\n" +
+    `Speichere den Plan anschließend mit save_week_plan (week_start=${weekStart}).\n` +
+    "Antworte danach mit einer kurzen Übersicht der Woche für Telegram – ein Tag pro Zeile."
+  );
+}
+
+app.post("/plan-week", async (req: Request, res: Response) => {
+  const { user_id, api_key, model, constraints, week_start }: PlanWeekRequest = req.body;
+
+  if (!user_id || !api_key || !week_start) {
+    res.status(400).json({ error: "user_id, api_key, week_start are required" });
+    return;
+  }
+
+  try {
+    const agent = await buildAgent(user_id, api_key, model ?? DEFAULT_MODEL, []);
+    const response = await runAgent(agent, planWeekMessage(week_start, constraints));
+    res.json({ response } satisfies AgentResponse);
+  } catch (err) {
+    console.error("Plan week error:", err);
+    res.status(500).json({
+      error: String(err),
+      response: "Wochenplanung fehlgeschlagen.",
     } satisfies AgentResponse);
   }
 });

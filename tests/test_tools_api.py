@@ -182,3 +182,172 @@ def test_coaching_profile_returns_dict(client, auth_headers):
 
     assert res.status_code == 200
     assert res.get_json() == profile
+
+
+# ─── /api/tools/training-preferences ─────────────────────────────────────────
+
+def test_training_preferences_requires_token(client):
+    """Preferences endpoint is internal-only."""
+    assert client.get("/api/tools/training-preferences?user_id=1").status_code == 401
+
+
+def test_training_preferences_returns_text(client, auth_headers):
+    """GET returns the stored preferences."""
+    with patch("services.planning.get_preferences", return_value="2x Laufen"):
+        res = client.get("/api/tools/training-preferences?user_id=1", headers=auth_headers)
+
+    assert res.status_code == 200
+    assert res.get_json()["preferences_text"] == "2x Laufen"
+
+
+def test_training_preferences_message_when_empty(client, auth_headers):
+    """No preferences yields a friendly message, not an empty string."""
+    with patch("services.planning.get_preferences", return_value=""):
+        res = client.get("/api/tools/training-preferences?user_id=1", headers=auth_headers)
+
+    assert "Noch keine Präferenzen" in res.get_json()["message"]
+
+
+def test_training_preferences_post_saves(client, auth_headers):
+    """POST stores the new preferences text."""
+    with patch("services.planning.save_preferences") as mock_save:
+        res = client.post(
+            "/api/tools/training-preferences",
+            json={"user_id": 1, "preferences_text": "1x Intervalle, 2x Laufen"},
+            headers=auth_headers,
+        )
+
+    assert res.status_code == 200
+    mock_save.assert_called_once_with(1, "1x Intervalle, 2x Laufen")
+
+
+def test_training_preferences_post_rejects_empty_text(client, auth_headers):
+    """An empty preferences text is a client error."""
+    res = client.post(
+        "/api/tools/training-preferences",
+        json={"user_id": 1, "preferences_text": "  "},
+        headers=auth_headers,
+    )
+    assert res.status_code == 400
+
+
+# ─── /api/tools/week-plan ────────────────────────────────────────────────────
+
+def test_week_plan_requires_token(client):
+    """Week plan endpoint is internal-only."""
+    assert client.get("/api/tools/week-plan?user_id=1").status_code == 401
+
+
+def test_week_plan_returns_plan_with_sessions(client, auth_headers):
+    """GET returns the plan including session ids the agent needs for logging."""
+    plan = {"id": 11, "status": "planned", "sessions": [{"id": 101, "title": "Fran"}]}
+    with patch("services.planning.get_week_plan", return_value=plan):
+        res = client.get(
+            "/api/tools/week-plan?user_id=1&week_start=2026-07-20", headers=auth_headers
+        )
+
+    assert res.status_code == 200
+    assert res.get_json()["sessions"][0]["id"] == 101
+
+
+def test_week_plan_defaults_to_current_week(client, auth_headers):
+    """Without week_start the current week is used."""
+    with patch("services.planning.get_week_plan", return_value=None) as mock_get:
+        res = client.get("/api/tools/week-plan?user_id=1", headers=auth_headers)
+
+    assert res.status_code == 200
+    from services.planning import current_week_start
+    assert mock_get.call_args.args[1] == current_week_start().isoformat()
+
+
+def test_week_plan_post_saves_sessions(client, auth_headers):
+    """POST hands the sessions to save_week_plan."""
+    sessions = [
+        {"date": "2026-07-20", "title": "Intervalle", "description": "6x400m"},
+    ]
+    with patch("services.planning.save_week_plan", return_value=1) as mock_save:
+        res = client.post(
+            "/api/tools/week-plan",
+            json={"user_id": 1, "week_start": "2026-07-20", "sessions": sessions},
+            headers=auth_headers,
+        )
+
+    assert res.status_code == 200
+    mock_save.assert_called_once_with(1, "2026-07-20", sessions)
+    assert "1 Einheiten" in res.get_json()["message"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"user_id": 1, "sessions": [{"date": "d", "title": "t", "description": "x"}]},
+        {"user_id": 1, "week_start": "2026-07-20", "sessions": []},
+        {"user_id": 1, "week_start": "2026-07-20", "sessions": "nope"},
+        {"user_id": 1, "week_start": "2026-07-20", "sessions": [{"title": "no date"}]},
+    ],
+    ids=["missing_week_start", "empty_sessions", "sessions_not_a_list", "session_missing_fields"],
+)
+def test_week_plan_post_validates_payload(client, auth_headers, payload):
+    """Malformed plans are rejected before anything is written."""
+    with patch("services.planning.save_week_plan") as mock_save:
+        res = client.post("/api/tools/week-plan", json=payload, headers=auth_headers)
+
+    assert res.status_code == 400
+    mock_save.assert_not_called()
+
+
+# ─── /api/tools/session-result ───────────────────────────────────────────────
+
+def test_session_result_requires_token(client):
+    """Result endpoint is internal-only."""
+    assert client.post("/api/tools/session-result", json={}).status_code == 401
+
+
+def test_session_result_logs_result(client, auth_headers):
+    """A well-formed result is passed through to the planning service."""
+    stored = {"id": 101, "title": "Intervalle", "date": "2026-07-20"}
+    with patch("services.planning.log_session_result", return_value=stored) as mock_log:
+        res = client.post(
+            "/api/tools/session-result",
+            json={"user_id": 1, "session_id": 101, "status": "done",
+                  "result_text": "6x400 avg 1:31", "rpe": 9},
+            headers=auth_headers,
+        )
+
+    assert res.status_code == 200
+    assert "Intervalle" in res.get_json()["message"]
+    kwargs = mock_log.call_args.kwargs
+    assert kwargs["session_id"] == 101
+    assert kwargs["rpe"] == 9
+
+
+def test_session_result_message_when_no_match(client, auth_headers):
+    """An unmatched session tells the agent how to recover."""
+    with patch("services.planning.log_session_result", return_value=None):
+        res = client.post(
+            "/api/tools/session-result",
+            json={"user_id": 1, "session_id": 999, "status": "done"},
+            headers=auth_headers,
+        )
+
+    assert res.status_code == 200
+    assert "get_week_plan" in res.get_json()["message"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"user_id": 1},
+        {"user_id": 1, "session_id": 1, "status": "vielleicht"},
+        {"user_id": 1, "session_id": 1, "rpe": 11},
+        {"user_id": 1, "session_id": 1, "rpe": "acht"},
+    ],
+    ids=["no_id_or_date", "bad_status", "rpe_too_high", "rpe_not_a_number"],
+)
+def test_session_result_validates_payload(client, auth_headers, payload):
+    """Bad results are rejected before touching the database."""
+    with patch("services.planning.log_session_result") as mock_log:
+        res = client.post("/api/tools/session-result", json=payload, headers=auth_headers)
+
+    assert res.status_code == 400
+    mock_log.assert_not_called()

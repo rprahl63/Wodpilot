@@ -40,7 +40,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      - PYTHON_API_URL=http://web:5000
+      - PYTHON_API_URL=http://web:8080
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     networks:
       - internal

@@ -1,7 +1,7 @@
 import { Type } from "typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 
-const PYTHON_API = process.env.PYTHON_API_URL ?? "http://web:5000";
+const PYTHON_API = process.env.PYTHON_API_URL ?? "http://web:8080";
 const INTERNAL_TOKEN = process.env.INTERNAL_API_TOKEN ?? "";
 
 function makeHeaders(): Record<string, string> {
@@ -204,6 +204,145 @@ export function createTools(userId: number): AgentTool<any>[] {
         const text = await apiPost(`/api/tools/update-coaching-style`, {
           user_id: userId,
           coaching_style: p.coaching_style,
+          notes: p.notes,
+        });
+        return textResult(text);
+      },
+    },
+    {
+      name: "get_training_preferences",
+      label: "Get Training Preferences",
+      description:
+        "Get the athlete's free-text training preferences (weekly rhythm, preferred session types, locations). Always call this before planning a week.",
+      parameters: Type.Object({}),
+      execute: async () => {
+        const text = await apiGet(
+          `/api/tools/training-preferences?user_id=${userId}`
+        );
+        return textResult(text);
+      },
+    },
+    {
+      name: "save_training_preferences",
+      label: "Save Training Preferences",
+      description:
+        "Overwrite the athlete's training preferences. Use when the athlete describes a lasting change to their weekly training rhythm (not for one-off scheduling constraints).",
+      parameters: Type.Object({
+        preferences_text: Type.String({
+          description: "Complete new preferences text, e.g. '1x/Woche Intervalle auf der 400m Bahn, 2x Laufen, 2x Functional Strength in der Box mit WOD'",
+        }),
+      }),
+      execute: async (_id: string, params: unknown) => {
+        const p = params as { preferences_text: string };
+        const text = await apiPost(`/api/tools/training-preferences`, {
+          user_id: userId,
+          preferences_text: p.preferences_text,
+        });
+        return textResult(text);
+      },
+    },
+    {
+      name: "get_week_plan",
+      label: "Get Week Plan",
+      description:
+        "Get the athlete's training plan for a week including every session with its id, date, title, description, status and logged result. Call this before discussing today's training and before logging a result (you need the session id).",
+      parameters: Type.Object({
+        week_start: Type.Optional(
+          Type.String({
+            description: "Monday of the week as YYYY-MM-DD. Defaults to the current week.",
+          })
+        ),
+      }),
+      execute: async (_id: string, params: unknown) => {
+        const p = params as { week_start?: string };
+        const qs = p.week_start ? `&week_start=${p.week_start}` : "";
+        const text = await apiGet(`/api/tools/week-plan?user_id=${userId}${qs}`);
+        return textResult(text);
+      },
+    },
+    {
+      name: "save_week_plan",
+      label: "Save Week Plan",
+      description:
+        "Store the training sessions for a week. Replaces any existing sessions for that week. Every session must be fully written out so the athlete can execute it without asking back.",
+      parameters: Type.Object({
+        week_start: Type.String({
+          description: "Monday of the planned week as YYYY-MM-DD",
+        }),
+        sessions: Type.Array(
+          Type.Object({
+            date: Type.String({ description: "Session date as YYYY-MM-DD" }),
+            title: Type.String({ description: "Short title, e.g. 'Intervalle 6x400m'" }),
+            session_type: Type.Optional(
+              Type.String({
+                description: "One of: intervals, run, strength, wod, mobility, rest",
+              })
+            ),
+            description: Type.String({
+              description:
+                "Full session: warm-up, main part with sets/reps/pace/rest, cool-down. Multi-line.",
+            }),
+            position: Type.Optional(
+              Type.Number({ description: "Order within the day, starting at 0" })
+            ),
+          }),
+          { description: "All sessions of the week, in chronological order" }
+        ),
+      }),
+      execute: async (_id: string, params: unknown) => {
+        const p = params as {
+          week_start: string;
+          sessions: Record<string, unknown>[];
+        };
+        const text = await apiPost(`/api/tools/week-plan`, {
+          user_id: userId,
+          week_start: p.week_start,
+          sessions: p.sessions,
+        });
+        return textResult(text);
+      },
+    },
+    {
+      name: "log_session_result",
+      label: "Log Session Result",
+      description:
+        "Log the athlete's result for a planned session. Call get_week_plan first to find the matching session id. Use when the athlete reports a completed or skipped workout in chat.",
+      parameters: Type.Object({
+        session_id: Type.Optional(
+          Type.Number({ description: "Session id from get_week_plan (preferred)" })
+        ),
+        date: Type.Optional(
+          Type.String({
+            description: "YYYY-MM-DD, only as a fallback when no session id is known",
+          })
+        ),
+        status: Type.Optional(
+          Type.String({ description: "'done' or 'skipped' (default: done)" })
+        ),
+        result_text: Type.Optional(
+          Type.String({ description: "Result, e.g. '6x400m, Schnitt 1:31'" })
+        ),
+        rpe: Type.Optional(
+          Type.Number({ description: "Perceived exertion 1-10" })
+        ),
+        notes: Type.Optional(Type.String({ description: "Additional notes" })),
+      }),
+      execute: async (_id: string, params: unknown) => {
+        const p = params as {
+          session_id?: number;
+          date?: string;
+          status?: string;
+          result_text?: string;
+          rpe?: number;
+          notes?: string;
+        };
+        const text = await apiPost(`/api/tools/session-result`, {
+          user_id: userId,
+          session_id: p.session_id,
+          date: p.date,
+          status: p.status ?? "done",
+          result_text: p.result_text,
+          rpe: p.rpe,
           notes: p.notes,
         });
         return textResult(text);

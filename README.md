@@ -4,7 +4,9 @@ WODpilot ist ein Telegram-Bot und Admin-Dashboard für personalisiertes CrossFit
 
 ## Features
 
-- **Telegram Bot** – Konversationsbasiertes Coaching, Bild-/Videoanalyse, Morgen-Briefings
+- **Telegram Bot** – Konversationsbasiertes Coaching, Sprachnachrichten, Bild-/Videoanalyse, Morgen-Briefings
+- **Athleten-Dashboard** – Wochenplan einsehen, Ergebnisse eintragen, Trainingspräferenzen pflegen
+- **Wochenplanung** – Sonntags fragt der Coach nach Terminen und plant die Woche
 - **Garmin Integration** – Automatische Synchronisation von Aktivitäten, ATL/CTL/TSB-Berechnung
 - **WOD Scraper** – Tägliche WODs von konfigurierbaren CrossFit-Box-Webseiten
 - **4-stufiges Memory-System** – Working Memory, Semantic Memory (pgvector), Episodic Memory, Procedural Memory
@@ -107,10 +109,14 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `/prs` | Personal Records |
 | `/wod` | Heutiges WOD |
 | `/briefing` | Morgendliches Briefing |
+| `/dashboard` | Login-Link zum persönlichen Wochenplan |
+| `/replan` | Kommende Woche planen (optionale Vorgaben als Argument) |
 | `/settings` | Einstellungen |
 | `/delete` | Account löschen (DSGVO) |
 
-Zusätzlich: Freitext-Nachrichten, Bilder und Videos werden direkt vom Coach beantwortet.
+Zusätzlich: Freitext-Nachrichten, Sprachnachrichten, Bilder und Videos werden direkt vom
+Coach beantwortet. Sprachnachrichten werden transkribiert und wie getippte Nachrichten
+behandelt – auch Trainingsergebnisse lassen sich so einsprechen.
 
 ## Garmin Integration
 

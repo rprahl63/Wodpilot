@@ -62,6 +62,32 @@ Die Migrations laufen automatisch beim ersten Start über
 `/docker-entrypoint-initdb.d` — **nur solange `data/db` leer ist**. Spätere
 Schema-Änderungen müssen von Hand per `psql` eingespielt werden.
 
+## Update auf eine neue Version
+
+Reihenfolge ist wichtig: **erst das Schema, dann die Container.** Startet der
+neue Code gegen ein altes Schema, schlagen die Queries fehl.
+
+```bash
+cd /volume1/docker/wodpilot
+git pull
+
+# 1. Neue Migrations einspielen (idempotent – alles CREATE ... IF NOT EXISTS)
+cd deploy/nas
+docker compose exec -T db psql -U wodpilot -d wodpilot \
+  < ../../db/migrations/003_training_plans.sql
+
+# 2. Images neu bauen und starten
+docker compose build
+docker compose up -d
+
+# 3. Prüfen
+docker compose ps
+docker compose logs -f bot
+```
+
+Die Datei unter `initdb/35-003_training_plans.sql` ist nur für eine **Neu**-
+Installation da; auf einer bestehenden DB passiert dort nichts.
+
 ## Zugriff
 
 Dashboard und Chat: `http://<netbird-ip>:8080` — nur aus dem NetBird-Netz.

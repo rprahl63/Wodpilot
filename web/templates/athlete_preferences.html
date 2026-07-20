@@ -1,0 +1,25 @@
+{% extends "athlete_base.html" %}
+{% block title %}Präferenzen – WODpilot{% endblock %}
+
+{% block content %}
+<h4 class="mb-1">Trainingspräferenzen</h4>
+<p class="muted small mb-4">
+    Beschreibe deinen gewünschten Wochenrhythmus in eigenen Worten. Der Coach nutzt das
+    jeden Sonntag als Grundlage für deinen Wochenplan.
+</p>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            <textarea name="preferences_text" rows="10" class="form-control"
+                      placeholder="z. B. 1x pro Woche Intervalltraining auf der 400m-Tartanbahn, 2x Laufen, 2x funktionales Training in der Box mit Kraftfokus und einem strammen WOD am Ende.">{{ preferences }}</textarea>
+            <button type="submit" class="btn btn-primary mt-3">Speichern</button>
+        </form>
+    </div>
+</div>
+
+<p class="muted small mt-3">
+    Einmalige Termine gehören nicht hierher – die sagst du dem Coach einfach, wenn er
+    sonntags nach der Woche fragt.
+</p>
+{% endblock %}

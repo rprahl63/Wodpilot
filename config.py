@@ -33,6 +33,15 @@ class Config:
     web_port: int = field(
         default_factory=lambda: int(os.environ.get("WEB_PORT", "8080"))
     )
+    # Public base URL of the web app – used to build athlete magic links.
+    dashboard_base_url: str = field(
+        default_factory=lambda: os.environ.get(
+            "DASHBOARD_BASE_URL", "http://localhost:8080"
+        ).rstrip("/")
+    )
+    login_token_ttl_minutes: int = field(
+        default_factory=lambda: int(os.environ.get("LOGIN_TOKEN_TTL_MINUTES", "15"))
+    )
 
     # Requesty router – chat models and embeddings both go through here.
     requesty_base_url: str = field(
@@ -50,6 +59,12 @@ class Config:
             "EMBEDDING_MODEL", "openai/text-embedding-3-large"
         )
     )
+    # Speech-to-text for Telegram voice messages, also via Requesty (BYOK).
+    transcription_model: str = field(
+        default_factory=lambda: os.environ.get(
+            "TRANSCRIPTION_MODEL", "openai/gpt-4o-mini-transcribe"
+        )
+    )
 
     # Scheduling (cron expressions)
     garmin_sync_cron: str = field(
@@ -60,6 +75,14 @@ class Config:
     )
     morning_briefing_cron: str = field(
         default_factory=lambda: os.environ.get("MORNING_BRIEFING_CRON", "0 7 * * *")
+    )
+    weekly_plan_ask_cron: str = field(
+        default_factory=lambda: os.environ.get("WEEKLY_PLAN_ASK_CRON", "0 10 * * sun")
+    )
+    weekly_plan_fallback_cron: str = field(
+        default_factory=lambda: os.environ.get(
+            "WEEKLY_PLAN_FALLBACK_CRON", "0 18 * * sun"
+        )
     )
 
     # Defaults
