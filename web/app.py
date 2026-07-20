@@ -155,6 +155,23 @@ def create_app() -> Flask:
             "user_detail.html", user=user_row, memories=memories, episodes=episodes
         )
 
+    @app.route("/users/<int:user_id>/dashboard")
+    @login_required
+    def view_as_athlete(user_id: int):
+        """Open an athlete's dashboard from the admin UI.
+
+        Same impersonation the admin chat already does, just for the web view.
+        The admin session stays untouched, so leaving the athlete view lands
+        back in the admin area.
+        """
+        row = (
+            get_db().table("users").select("id").eq("id", user_id).execute()
+        ).data
+        if not row:
+            abort(404)
+        session["athlete_user_id"] = user_id
+        return redirect(url_for("athlete.week"))
+
     # ─── Invite codes ─────────────────────────────────────────────────────────
 
     @app.route("/codes", methods=["GET", "POST"])

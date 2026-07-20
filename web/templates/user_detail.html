@@ -5,6 +5,9 @@
     <a href="/users" class="btn btn-outline-secondary btn-sm">← Zurück</a>
     <h1 class="mb-0">{{ user.full_name or user.username or 'Athlet' }}</h1>
     <span class="badge {% if user.role == 'admin' %}badge-admin{% else %}bg-secondary{% endif %}">{{ user.role }}</span>
+    <a href="{{ url_for('view_as_athlete', user_id=user.id) }}" class="btn btn-outline-primary btn-sm ms-auto">
+        <i class="bi bi-calendar3"></i> Dashboard öffnen
+    </a>
 </div>
 
 <div class="row g-3">

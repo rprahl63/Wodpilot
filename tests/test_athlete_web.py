@@ -86,6 +86,49 @@ def test_logout_keeps_admin_session(client):
         assert sess["logged_in"] is True
 
 
+# ─── Admin "view as athlete" ─────────────────────────────────────────────────
+
+def test_view_as_athlete_requires_admin_login(client):
+    """Without an admin session this must not hand out an athlete session."""
+    res = client.get("/users/7/dashboard")
+
+    assert res.status_code == 302
+    assert "/login" in res.headers["Location"]
+    with client.session_transaction() as sess:
+        assert "athlete_user_id" not in sess
+
+
+def test_view_as_athlete_sets_session_for_admin(client, athlete_db):
+    """An admin can open any athlete's dashboard from the user page."""
+    with client.session_transaction() as sess:
+        sess["logged_in"] = True
+
+    with patch("web.app.get_db", return_value=athlete_db):
+        res = client.get("/users/7/dashboard")
+
+    assert res.status_code == 302
+    assert res.headers["Location"].endswith("/me/")
+    with client.session_transaction() as sess:
+        assert sess["athlete_user_id"] == 7
+        assert sess["logged_in"] is True  # admin session survives
+
+
+def test_view_as_athlete_404_for_unknown_user(client):
+    """A user id that does not exist must not create a session."""
+    mock_db = MagicMock()
+    mock_db.table.return_value.select.return_value.eq.return_value.execute.return_value.data = []
+
+    with client.session_transaction() as sess:
+        sess["logged_in"] = True
+
+    with patch("web.app.get_db", return_value=mock_db):
+        res = client.get("/users/999/dashboard")
+
+    assert res.status_code == 404
+    with client.session_transaction() as sess:
+        assert "athlete_user_id" not in sess
+
+
 # ─── Week view ────────────────────────────────────────────────────────────────
 
 def test_week_renders_all_seven_days(client, athlete_db):

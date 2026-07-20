@@ -32,11 +32,25 @@
                href="{{ url_for('athlete.preferences') }}"><i class="bi bi-sliders"></i> Präferenzen</a>
         </li>
     </ul>
+    {% if session.logged_in %}
+    <a href="/users/{{ session.athlete_user_id }}" class="nav-link">
+        <i class="bi bi-arrow-left"></i> Zurück zum Admin
+    </a>
+    {% else %}
     <a href="{{ url_for('athlete.logout') }}" class="nav-link text-danger">
         <i class="bi bi-box-arrow-right"></i> Logout
     </a>
     {% endif %}
+    {% endif %}
 </nav>
+
+{% if session.logged_in and session.athlete_user_id %}
+<div class="container" style="max-width: 900px;">
+    <div class="alert alert-info py-2 small">
+        <i class="bi bi-eye"></i> Adminansicht – du siehst das Dashboard dieses Athleten.
+    </div>
+</div>
+{% endif %}
 
 <div class="container pb-5" style="max-width: 900px;">
     {% with messages = get_flashed_messages(with_categories=true) %}
