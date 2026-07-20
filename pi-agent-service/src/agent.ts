@@ -44,6 +44,15 @@ Du kennst ihre Trainingsbelastung, Geschichte, PRs, Verletzungen und Ziele.
 - Dauerhafte Änderungen am Wochenrhythmus gehören mit save_training_preferences in die
   Präferenzen – einmalige Termine nicht.
 
+## Websuche
+- Für alles, was du nicht aus den Daten des Athleten wissen kannst, nutze web_search:
+  aktuelle sportwissenschaftliche Erkenntnisse, Wettkampftermine, Sportstätten und Bahnen,
+  Öffnungszeiten, Wetter.
+- Nenne die Quelle, wenn du dich auf eine Suche stützt. Erfinde niemals Quellen oder URLs.
+- Bleib skeptisch: Eine einzelne Website ist keine Evidenz. Bei Trainingsempfehlungen zählt
+  der Trainingsstand des Athleten mehr als ein allgemeiner Artikel.
+- Für Trainingsdaten, PRs und den Wochenplan nimmst du die anderen Tools, nicht die Suche.
+
 ## Wichtige Regeln
 - Du bist kein Arzt. Bei Verletzungen: "Konsultiere einen Arzt oder Physiotherapeuten."
 - Erkenne PRs und feiere sie – speichere sie in Episodic Memory.
@@ -89,7 +98,7 @@ export async function buildAgent(
   history: HistoryMessage[] = []
 ): Promise<Agent> {
   const model = await buildRequestyModel(modelName || DEFAULT_MODEL, apiKey);
-  const tools = createTools(userId);
+  const tools = createTools(userId, apiKey, modelName || DEFAULT_MODEL);
   const messages = convertHistory(history, modelName || DEFAULT_MODEL);
 
   return new Agent({

@@ -1,5 +1,6 @@
 import { Type } from "typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
+import { REQUESTY_BASE_URL, WEB_SEARCH_MODEL, supportsWebSearch } from "./requesty.js";
 
 const PYTHON_API = process.env.PYTHON_API_URL ?? "http://web:8080";
 const INTERNAL_TOKEN = process.env.INTERNAL_API_TOKEN ?? "";
@@ -31,8 +32,72 @@ async function apiPost(path: string, body: unknown): Promise<string> {
   return res.text();
 }
 
+/**
+ * Web search via Requesty's server-side `web_search` tool, which the router
+ * translates to each provider's native format. Runs as a sub-call because the
+ * agent library only handles client-side tools — the provider does the actual
+ * searching, we just relay the question and hand back the answer with sources.
+ */
+async function runWebSearch(
+  query: string,
+  apiKey: string,
+  agentModel: string
+): Promise<string> {
+  const model = WEB_SEARCH_MODEL || agentModel;
+
+  if (!(await supportsWebSearch(model, apiKey))) {
+    return `Websuche nicht verfügbar: Das Modell ${model} unterstützt keine Suche. Setze WEB_SEARCH_MODEL auf ein Modell mit supports_web_search.`;
+  }
+
+  const res = await fetch(`${REQUESTY_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Beantworte die Frage mit aktueller Websuche. Fasse dich kurz und faktisch. " +
+            "Nenne zu jeder Aussage die Quelle als URL. Wenn du nichts Belastbares findest, sage das.",
+        },
+        { role: "user", content: query },
+      ],
+      tools: [{ type: "web_search" }],
+    }),
+    signal: AbortSignal.timeout(90_000),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Web search returned ${res.status}`);
+  }
+
+  const body = (await res.json()) as {
+    choices?: { message?: { content?: string; annotations?: unknown[] } }[];
+  };
+  const msg = body.choices?.[0]?.message;
+  const text = (msg?.content ?? "").trim();
+
+  // Providers differ in where they put citations; surface any URLs we find so
+  // the coach can quote them instead of inventing references.
+  const urls = new Set<string>();
+  for (const m of JSON.stringify(msg?.annotations ?? []).matchAll(/https?:\/\/[^"'\s\\]+/g)) {
+    urls.add(m[0]);
+  }
+
+  if (!text && urls.size === 0) return "Die Websuche lieferte kein Ergebnis.";
+  return urls.size > 0 ? `${text}\n\nQuellen:\n${[...urls].join("\n")}` : text;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createTools(userId: number): AgentTool<any>[] {
+export function createTools(
+  userId: number,
+  apiKey: string,
+  modelId: string
+): AgentTool<any>[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return [
     {
@@ -207,6 +272,26 @@ export function createTools(userId: number): AgentTool<any>[] {
           notes: p.notes,
         });
         return textResult(text);
+      },
+    },
+    {
+      name: "web_search",
+      label: "Web Search",
+      description:
+        "Search the web for things you cannot know from the athlete's own data: current sports-science findings, competition dates and results, gyms, tracks and venues (e.g. 'Ahorn Sportpark Paderborn'), opening hours, weather. Do NOT use it for the athlete's training data, PRs or plan – those come from the other tools. Always pass on the sources in your answer.",
+      parameters: Type.Object({
+        query: Type.String({
+          description:
+            "Search question in natural language, e.g. 'Ahorn Sportpark Paderborn 400m Tartanbahn öffentlich nutzbar'",
+        }),
+      }),
+      execute: async (_id: string, params: unknown) => {
+        const p = params as { query: string };
+        try {
+          return textResult(await runWebSearch(p.query, apiKey, modelId));
+        } catch (err) {
+          return textResult(`Websuche fehlgeschlagen: ${String(err)}`);
+        }
       },
     },
     {

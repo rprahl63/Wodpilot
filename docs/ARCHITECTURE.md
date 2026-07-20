@@ -60,7 +60,15 @@ Begründung: `deploy/nas/README.md`.
   - `POST /plan-week` – Wochenplanung (schreibt die Einheiten per `save_week_plan`-Tool)
   - `POST /analyze` – Bild-/Videoanalyse via Vision-API
   - `GET /health` – Health-Check
-- **Tools:** 15 Tools, die HTTP-Calls an die Python Tools API machen
+- **Tools:** 16 Tools. 15 davon machen HTTP-Calls an die Python Tools API;
+  `web_search` geht direkt an Requesty (siehe unten)
+- **Websuche:** Requesty bietet ein serverseitiges `web_search`-Tool
+  (`tools: [{type: "web_search"}]`) und übersetzt es je nach Provider (Anthropic,
+  OpenAI, Vertex, xAI, Perplexity). Weil die Agent-Library nur clientseitige Tools
+  kennt, läuft die Suche als eigener Chat-Completions-Unteraufruf und gibt Antwort
+  plus Quellen-URLs zurück. Eine offizielle pi-Erweiterung für Websuche existiert
+  nicht – dieser Weg kommt ohne zusätzliche Abhängigkeit aus und nutzt den
+  BYOK-Key des Athleten.
 - **Stateless:** Conversation History wird per Request übergeben (Python verwaltet Persistenz)
 
 ### Flask Web + Tools API (`web/app.py`)

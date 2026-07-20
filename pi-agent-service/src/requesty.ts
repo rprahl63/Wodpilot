@@ -28,7 +28,14 @@ interface RequestyModel {
   supports_vision?: boolean;
   supports_reasoning?: boolean;
   supports_tool_calling?: boolean;
+  supports_web_search?: boolean;
 }
+
+/**
+ * Model used for the web_search sub-call. Not every chat model can search;
+ * override this when the athlete's own model lacks the capability.
+ */
+export const WEB_SEARCH_MODEL = process.env.WEB_SEARCH_MODEL ?? "";
 
 const CATALOGUE_TTL_MS = 60 * 60 * 1000;
 let catalogue: { fetchedAt: number; models: Map<string, RequestyModel> } | null = null;
@@ -112,6 +119,16 @@ export async function buildRequestyModel(
     contextWindow: meta.context_window ?? 200_000,
     maxTokens: meta.max_output_tokens ?? 8_192,
   };
+}
+
+/** Whether the model can run Requesty's server-side web search. */
+export async function supportsWebSearch(modelId: string, apiKey: string): Promise<boolean> {
+  try {
+    const meta = (await loadCatalogue(apiKey)).get(modelId);
+    return meta?.supports_web_search ?? false;
+  } catch {
+    return true; // don't block on a catalogue outage – the call itself will tell us
+  }
 }
 
 /** Whether the model can call tools. Without that the coach has no data access. */

@@ -96,6 +96,9 @@ services:
       # Anthropic, so the model is selectable per user in the dashboard.
       REQUESTY_BASE_URL: ${REQUESTY_BASE_URL:-https://router.requesty.ai/v1}
       DEFAULT_LLM_MODEL: ${DEFAULT_LLM_MODEL:-anthropic/claude-sonnet-4-5}
+      # Leer = Modell des Athleten auch fuer die Websuche nutzen. Nur setzen,
+      # wenn dessen Modell kein supports_web_search hat.
+      WEB_SEARCH_MODEL: ${WEB_SEARCH_MODEL:-}
     depends_on: [rest]
     mem_limit: 256m
     networks: [wodpilot]
