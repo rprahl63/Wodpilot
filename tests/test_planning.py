@@ -103,6 +103,60 @@ def test_claim_planning_without_constraints_keeps_existing_text(monkeypatch):
     assert "constraints_text" not in mock_db.table.return_value.update.call_args.args[0]
 
 
+# ─── claim_replan ─────────────────────────────────────────────────────────────
+
+def test_claim_replan_overwrites_an_already_planned_week(monkeypatch):
+    """Re-planning a finished week is the whole point of /replan."""
+    _mock_env(monkeypatch)
+    mock_db = MagicMock()
+    chain = mock_db.table.return_value.update.return_value.eq.return_value.neq.return_value
+    chain.execute.return_value.data = [{"id": 11, "status": "planning"}]
+
+    with patch("services.planning.get_db", return_value=mock_db), \
+         patch("services.planning.get_week_plan",
+               return_value={"id": 11, "status": "planned"}):
+        from services.planning import claim_replan
+        plan = claim_replan(3, "2026-07-20", "Donnerstag Physio")
+
+    assert plan["id"] == 11
+    update_arg = mock_db.table.return_value.update.call_args.args[0]
+    assert update_arg["status"] == "planning"
+    assert update_arg["constraints_text"] == "Donnerstag Physio"
+
+
+def test_claim_replan_refuses_while_planning_in_flight(monkeypatch):
+    """Two /replan calls in a row must not plan the same week twice."""
+    _mock_env(monkeypatch)
+    mock_db = MagicMock()
+    chain = mock_db.table.return_value.update.return_value.eq.return_value.neq.return_value
+    chain.execute.return_value.data = []
+
+    with patch("services.planning.get_db", return_value=mock_db), \
+         patch("services.planning.get_week_plan",
+               return_value={"id": 11, "status": "planning"}):
+        from services.planning import claim_replan
+        assert claim_replan(3, "2026-07-20") is None
+
+
+def test_claim_replan_creates_row_for_unplanned_week(monkeypatch):
+    """A week nobody asked about yet gets a fresh plan row."""
+    _mock_env(monkeypatch)
+    mock_db = MagicMock()
+    mock_db.table.return_value.insert.return_value.execute.return_value.data = [{"id": 99}]
+
+    with patch("services.planning.get_db", return_value=mock_db), \
+         patch("services.planning.get_week_plan", return_value=None):
+        from services.planning import claim_replan
+        plan = claim_replan(3, "2026-07-20", "kurze Woche")
+
+    assert plan["id"] == 99
+    inserted = mock_db.table.return_value.insert.call_args.args[0]
+    assert inserted["user_id"] == 3
+    assert inserted["week_start"] == "2026-07-20"
+    assert inserted["status"] == "planning"
+    assert inserted["constraints_text"] == "kurze Woche"
+
+
 # ─── save_week_plan ───────────────────────────────────────────────────────────
 
 def test_save_week_plan_replaces_sessions_and_marks_planned(monkeypatch):

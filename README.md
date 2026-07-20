@@ -109,7 +109,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `/wod` | Heutiges WOD |
 | `/briefing` | Morgendliches Briefing |
 | `/dashboard` | Login-Link zum persönlichen Wochenplan |
-| `/replan` | Kommende Woche planen (optionale Vorgaben als Argument) |
+| `/replan` | Woche neu planen – überschreibt einen bestehenden Plan.<br>`/replan` = laufende Woche, `/replan next` = kommende, `/replan 2026-07-27` = bestimmte.<br>Resttext wird als Vorgabe an den Planer gegeben. |
 | `/settings` | Einstellungen |
 | `/delete` | Account löschen (DSGVO) |
 

@@ -91,6 +91,11 @@ Antwort des Athleten und der 18:00-Fallback-Job dieselbe Woche nie doppelt plane
 Antwortet der Athlet, behandelt `bot/handlers.py` seine Nachricht als Planungs-Input
 statt als normalen Chat.
 
+`/replan` geht bewusst an dieser State-Machine vorbei: `claim_replan()` überschreibt
+auch eine bereits geplante Woche, denn genau das ist der Zweck des Befehls. Nur ein
+laufender Planungsvorgang (`status = 'planning'`) blockiert, damit zwei Aufrufe
+hintereinander nicht dieselbe Woche doppelt planen.
+
 ## Memory-System (4-stufig)
 
 ```

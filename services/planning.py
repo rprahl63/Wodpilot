@@ -151,6 +151,42 @@ def claim_planning(plan_id: int, constraints: Optional[str] = None) -> bool:
     return bool(rows)
 
 
+def claim_replan(
+    user_id: int, week_start: date | str, constraints: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Claim a week for on-demand planning (/replan), overwriting any existing plan.
+
+    Unlike the Sunday flow this deliberately accepts an already planned week –
+    that is the whole point of re-planning. Returns the plan row, or None when
+    planning is already in flight, so two /replan calls can't race.
+    """
+    db = get_db()
+    ws = week_start.isoformat() if isinstance(week_start, date) else week_start
+
+    update: Dict[str, Any] = {"status": "planning"}
+    if constraints is not None:
+        update["constraints_text"] = constraints
+
+    existing = get_week_plan(user_id, ws)
+    if existing:
+        rows = (
+            db.table("training_plans")
+            .update(update)
+            .eq("id", existing["id"])
+            .neq("status", "planning")
+            .execute()
+        ).data or []
+        return rows[0] if rows else None
+
+    rows = (
+        db.table("training_plans")
+        .insert({"user_id": user_id, "week_start": ws, **update})
+        .execute()
+    ).data or []
+    return rows[0] if rows else None
+
+
 def set_plan_failed(plan_id: int) -> None:
     """Mark a plan as failed so the fallback/replan can retry."""
     db = get_db()

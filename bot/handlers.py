@@ -233,7 +233,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "/wod – Heutiges WOD\n"
         "/briefing – Morgendliches Briefing jetzt\n"
         "/dashboard – Login-Link zu deinem Wochenplan\n"
-        "/replan – Kommende Woche jetzt neu planen\n"
+        "/replan – Woche neu planen (`next` oder Datum für eine andere Woche)\n"
         "/settings – Deine Einstellungen\n"
         "/delete – Account löschen (DSGVO)\n\n"
         "Schreib mir einfach, schick mir eine Sprachnachricht oder ein Video – "
@@ -367,23 +367,64 @@ async def cmd_dashboard(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+_NEXT_WEEK_WORDS = {"next", "nächste", "naechste", "kommende"}
+
+
+def parse_replan_args(args: list[str] | None) -> tuple[object, str | None]:
+    """
+    Split /replan arguments into (week_start, constraints).
+
+    Defaults to the *current* week – mid-week you usually want to fix the week
+    you are in. A leading "next"/"nächste" or an ISO date picks another week;
+    everything else is treated as constraints for the planner.
+    """
+    from datetime import date as _date
+
+    from services.planning import current_week_start, upcoming_week_start
+
+    args = list(args or [])
+    week = current_week_start()
+
+    if args:
+        head = args[0].lower().strip(",")
+        if head in _NEXT_WEEK_WORDS:
+            week = upcoming_week_start()
+            args = args[1:]
+        else:
+            try:
+                week = current_week_start(_date.fromisoformat(head))
+                args = args[1:]
+            except ValueError:
+                pass
+
+    constraints = " ".join(args).strip() or None
+    return week, constraints
+
+
 async def cmd_replan(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Plan the upcoming week on demand, using the rest of the message as input."""
+    """
+    Plan a week on demand, overwriting an existing plan.
+
+    `/replan` plans the current week, `/replan next` the coming one, and
+    `/replan 2026-07-27` a specific one. Any remaining text becomes the
+    constraints handed to the planner.
+    """
     user = await _require_user(update)
     if not user:
         return
 
     from services.pi_agent_client import generate_week_plan
-    from services.planning import claim_planning, mark_week_asked, upcoming_week_start
+    from services.planning import claim_replan
 
-    constraints = " ".join(ctx.args).strip() if ctx.args else None
-    week_start = upcoming_week_start()
+    week_start, constraints = parse_replan_args(ctx.args)
 
-    msg = await update.message.reply_text("🗓️ Plane deine Woche…")
+    msg = await update.message.reply_text(
+        f"🗓️ Plane deine Woche ab {week_start.strftime('%d.%m.')}…"
+    )
     try:
-        plan = mark_week_asked(user["id"], week_start)
-        if plan is None or not claim_planning(plan["id"], constraints):
-            await msg.edit_text("Diese Woche wird gerade schon geplant. Moment noch…")
+        plan = claim_replan(user["id"], week_start, constraints)
+        if plan is None:
+            await msg.edit_text("Diese Woche wird gerade schon geplant – einen Moment.")
             return
         response = await generate_week_plan(
             user_id=user["id"],
