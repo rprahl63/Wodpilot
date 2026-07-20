@@ -38,16 +38,13 @@ Supabase (PostgreSQL + pgvector) / Garmin Connect / WOD Sources
 | Telegram Bot | Python, python-telegram-bot | – |
 | Web / Admin + Tools API | Python, Flask | 8080 |
 | Pi-Agent LLM Service | Node.js, pi-agent-core | 3001 |
-| Reverse Proxy | Traefik v3 | 80/443 |
-| Database | Supabase (PostgreSQL + pgvector) | – |
+| Database | Postgres + PostgREST (pgvector), lokal auf dem NAS | – |
 
 ## Voraussetzungen
 
 - Docker & Docker Compose
-- Supabase-Projekt (kostenlos verfügbar)
 - Telegram Bot Token (von [@BotFather](https://t.me/BotFather))
-- Anthropic API-Key (für Nutzer, BYOK)
-- Hetzner Cloud Account (für Production, optional)
+- Requesty API-Key (pro Nutzer, BYOK – deckt Chat, Embeddings und Transkription ab)
 
 ## Quick Start (Lokal)
 
@@ -82,12 +79,14 @@ docker compose up --build
 | `ENCRYPTION_KEY` | Fernet-Key für Passwort-Verschlüsselung | ✅ |
 | `WEB_SECRET_KEY` | Flask Session Secret | ✅ |
 | `WEB_ADMIN_PASSWORD` | Admin Dashboard Passwort | ✅ |
-| `DOMAIN` | Domain für Traefik/Let's Encrypt | ✅ |
-| `ACME_EMAIL` | E-Mail für Let's Encrypt | ✅ |
+| `BIND_IP` | NetBird-IP, an die das Dashboard bindet | ✅ |
 | `INTERNAL_API_TOKEN` | Shared Secret zwischen Web und pi-agent | ✅ |
-| `OPENAI_API_KEY` | OpenAI-Key für pgvector-Embeddings | optional |
-| `DEFAULT_LLM_MODEL` | Standard-Modell (default: claude-sonnet-4-20250514) | optional |
+| `DASHBOARD_BASE_URL` | Basis-URL der Magic Links (default: `http://$BIND_IP:8080`) | optional |
+| `DEFAULT_LLM_MODEL` | Standard-Modell (default: anthropic/claude-sonnet-4-5) | optional |
+| `TRANSCRIPTION_MODEL` | Sprachnachrichten (default: openai/gpt-4o-mini-transcribe) | optional |
 | `MAX_API_CALLS_PER_DAY` | Rate-Limit pro User/Tag (default: 50) | optional |
+
+Die vollständige Liste für das NAS-Deployment steht in `deploy/nas/.env.example`.
 
 Encryption-Key generieren:
 ```bash
@@ -126,19 +125,21 @@ behandelt – auch Trainingsergebnisse lassen sich so einsprechen.
 4. TSS-Berechnung: `duration_h × (hr_ratio)² × 100`
 5. ATL (7d EMA), CTL (42d EMA), TSB = CTL - ATL
 
-## Production Deployment
+## Deployment
 
-Voraussetzungen: GitHub Secrets müssen gesetzt sein (siehe `.env.example`).
+WODpilot läuft auf einer **Synology DS218+ im LAN** – kein Cloud-Hosting, kein
+CI/CD, keine öffentliche Domain. Images werden lokal auf dem NAS gebaut, das
+Dashboard ist nur über NetBird erreichbar, der Bot arbeitet per Long Polling.
+
+Ablauf und Betrieb: **[`deploy/nas/README.md`](deploy/nas/README.md)**.
+Kurzfassung – erst Schema, dann Container:
 
 ```bash
-# Terraform (einmalig – VPS provisionieren)
-# Via GitHub Actions → Terraform Workflow → apply
-
-# CI/CD
-# Push auf main → automatisches Deployment via GitHub Actions
+ssh nas && cd /volume1/docker/wodpilot && git pull
+cd deploy/nas
+docker compose exec -T db psql -U wodpilot -d wodpilot < ../../db/migrations/<neue>.sql
+docker compose build && docker compose up -d
 ```
-
-Benötigte GitHub Secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `HCLOUD_TOKEN` und alle `.env`-Variablen.
 
 ## Lizenz
 

@@ -4,20 +4,21 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Hetzner VPS                              │
+│                  Synology DS218+ (LAN, kein Public Port)        │
 │                                                                 │
-│  ┌──────────┐   HTTPS/443   ┌──────────────────────────────┐   │
-│  │ Traefik  │◄──────────────│     Internet / Telegram      │   │
-│  │  v3      │               └──────────────────────────────┘   │
+│  ┌──────────┐   NetBird     ┌──────────────────────────────┐   │
+│  │ Dashboard│◄──────────────│  Athlet / Admin (VPN-only)   │   │
+│  │ :8080    │               └──────────────────────────────┘   │
 │  └────┬─────┘                                                   │
-│       │ :8080                                                   │
+│       │                     Telegram: Long Polling, kein Ingress│
 │  ┌────▼──────────────────┐                                      │
 │  │  Flask Web + Tools API│                                      │
 │  │  web/app.py           │                                      │
 │  │  - Admin Dashboard    │                                      │
+│  │  - /me/* Athleten-UI  │                                      │
 │  │  - /api/tools/*       │                                      │
 │  └────────┬──────────────┘                                      │
-│           │ HTTP :5000/api/tools/*                              │
+│           │ HTTP :8080/api/tools/*                              │
 │  ┌────────▼──────────────┐     ┌────────────────────────────┐  │
 │  │  Pi-Agent Service     │     │  Telegram Bot              │  │
 │  │  Node.js + pi-agent   │◄────│  bot/handlers.py           │  │
@@ -27,12 +28,15 @@
 └─────────────────────────────────────────────────────────────────┘
                         │
                         ▼
-               ┌─────────────────┐
-               │    Supabase     │
-               │  PostgreSQL     │
-               │  + pgvector     │
-               └─────────────────┘
+               ┌─────────────────────────┐
+               │  Postgres + PostgREST   │
+               │  + pgvector (lokal)     │
+               └─────────────────────────┘
 ```
+
+Der Code spricht weiterhin die Supabase-Client-Library; auf dem NAS antwortet
+statt der Cloud ein lokales PostgREST hinter einem nginx-Shim. Details und
+Begründung: `deploy/nas/README.md`.
 
 ## Services
 

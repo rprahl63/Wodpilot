@@ -63,7 +63,7 @@ Wodpilot/
 │   ├── scheduler.py    # APScheduler Jobs (Garmin sync, WOD scrape, Briefings)
 │   ├── scraper.py      # BeautifulSoup WOD Scraper
 │   └── training_load.py    # TSS/ATL/CTL/TSB Berechnung
-├── terraform/          # Hetzner VPS Provisioning (IaC)
+├── deploy/nas/         # Synology-Deployment (Compose, Postgres+PostgREST, Doku)
 ├── tests/              # pytest Tests
 ├── utils/
 │   └── crypto.py       # Fernet AES-128 Verschlüsselung
