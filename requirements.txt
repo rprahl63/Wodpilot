@@ -14,11 +14,6 @@ apscheduler==3.10.4
 flask==3.1.0
 gunicorn==22.0.0
 
-# MCP server (issue backlog for dev sessions)
-# Pinned to 3.x: StaticTokenVerifier and run(transport="http") are verified
-# against this major version, 4.x is already in pre-release.
-fastmcp>=3.4,<4
-
 # Garmin
 garminconnect==0.3.6
 

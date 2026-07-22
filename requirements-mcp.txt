@@ -1,0 +1,12 @@
+# Dependencies for the issue MCP server (Dockerfile.mcp) only.
+#
+# Deliberately NOT `-r requirements.txt`: fastmcp requires python-dotenv>=1.1.0,
+# which the main file pinned to 1.0.1 — sharing one file made a single MCP
+# dependency break the bot and web images too. The MCP server touches nothing
+# but services/issues.py, so it needs three packages, not the whole stack.
+#
+# Keep supabase in step with requirements.txt: both talk to the same PostgREST.
+
+fastmcp>=3.4,<4
+supabase==2.8.1
+httpx>=0.27.0
