@@ -1,12 +1,19 @@
 # Dependencies for the issue MCP server (Dockerfile.mcp) only.
 #
-# Deliberately NOT `-r requirements.txt`: fastmcp requires python-dotenv>=1.1.0,
-# which the main file pinned to 1.0.1 — sharing one file made a single MCP
-# dependency break the bot and web images too. The MCP server touches nothing
-# but services/issues.py, so it needs three packages, not the whole stack.
+# Deliberately NOT `-r requirements.txt`, and deliberately a different supabase
+# version than the rest of the stack. Two conflicts force this:
+#   * fastmcp needs python-dotenv>=1.1.0, the main file pinned 1.0.1
+#   * fastmcp needs httpx>=0.28.1, supabase 2.8.1 pins httpx<0.28
+# Sharing one file made a single MCP dependency break the bot and web images.
 #
-# Keep supabase in step with requirements.txt: both talk to the same PostgREST.
+# The divergence is safe because the MCP server only reaches services/issues.py,
+# which does plain table CRUD (select/insert/update with eq/in_/order/limit) —
+# that surface is unchanged across supabase-py 2.x. Anything beyond CRUD must
+# not be added here without re-checking both stacks.
+#
+# Resolved and verified together for Python 3.12:
+# fastmcp 3.4.4, supabase 2.31.0, httpx 0.28.1.
 
 fastmcp>=3.4,<4
-supabase==2.8.1
-httpx>=0.27.0
+supabase==2.31.0
+httpx>=0.28.1,<0.29

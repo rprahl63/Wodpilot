@@ -140,6 +140,14 @@ Anders als der pi-agent geht der MCP-Server **nicht** über die Tools-API, sonde
 direkt über `services/issues.py` an PostgREST: Er läuft ohnehin im selben
 Docker-Netz, und ein zweiter HTTP-Hop bringt hier nichts.
 
+Er hat aus einem Grund eine eigene `requirements-mcp.txt`: fastmcp verlangt
+`httpx>=0.28.1` und `python-dotenv>=1.1.0`, beides schließt das gemeinsame
+`requirements.txt` aus. Solange bot, web und mcp sich eine Datei teilten,
+scheiterte am MCP-Konflikt der Build *aller* Python-Images. Dadurch läuft im
+MCP-Container ein neueres `supabase` (2.31) als in bot und web (2.8.1) — das
+trägt, weil dort nur einfaches Tabellen-CRUD läuft, aber es ist der Grund,
+warum in `mcp_server/` nichts Anspruchsvolleres gegen die DB gehen darf.
+
 Prüfen:
 
 ```bash
