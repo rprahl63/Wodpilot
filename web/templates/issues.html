@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Issues – WODpilot{% endblock %}
+{% block content %}
+{% set icons = {'open': '🆕', 'in_progress': '🔧', 'done': '✅', 'rejected': '🚫'} %}
+{% set kinds = {'bug': 'Bug', 'feature': 'Feature', 'question': 'Frage', 'other': 'Sonstiges'} %}
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h1 class="mb-0">Issues <span class="badge bg-secondary">{{ issues|length }}</span></h1>
+    <div class="btn-group">
+        <a href="/issues?status=open,in_progress" class="btn btn-sm btn-outline-secondary {% if status == 'open,in_progress' %}active{% endif %}">Offen</a>
+        <a href="/issues?status=done" class="btn btn-sm btn-outline-secondary {% if status == 'done' %}active{% endif %}">Erledigt</a>
+        <a href="/issues?status=rejected" class="btn btn-sm btn-outline-secondary {% if status == 'rejected' %}active{% endif %}">Abgelehnt</a>
+        <a href="/issues?status=all" class="btn btn-sm btn-outline-secondary {% if status == 'all' %}active{% endif %}">Alle</a>
+    </div>
+</div>
+
+{% if not issues %}
+<div class="card"><div class="card-body text-muted">Keine Issues in dieser Ansicht.</div></div>
+{% endif %}
+
+{% for i in issues %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start gap-3">
+            <div>
+                <h5 class="mb-1">{{ icons.get(i.status, '•') }} #{{ i.id }} {{ i.title }}</h5>
+                <div class="text-muted small mb-2">
+                    <span class="badge bg-secondary">{{ kinds.get(i.kind, i.kind) }}</span>
+                    {% if i.priority == 'high' %}<span class="badge bg-danger">hoch</span>
+                    {% elif i.priority == 'low' %}<span class="badge bg-dark">niedrig</span>{% endif %}
+                    · {{ (i.users.full_name or i.users.username or 'Unbekannt') if i.users else 'Unbekannt' }}
+                    · {{ (i.created_at or '')[:16].replace('T', ' ') }}
+                    {% if i.notified_at %}· <i class="bi bi-send"></i> benachrichtigt{% endif %}
+                </div>
+                {% if i.body %}<pre class="mb-2">{{ i.body }}</pre>{% endif %}
+                {% if i.resolution %}<div class="small"><strong>Ergebnis:</strong> {{ i.resolution }}</div>{% endif %}
+            </div>
+        </div>
+
+        <form method="post" action="/issues/{{ i.id }}/status" class="row g-2 mt-2">
+            <div class="col-md-3">
+                <select name="status" class="form-select form-select-sm">
+                    {% for s in ['open', 'in_progress', 'done', 'rejected'] %}
+                    <option value="{{ s }}" {% if s == i.status %}selected{% endif %}>{{ icons[s] }} {{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-7">
+                <input type="text" name="resolution" class="form-control form-control-sm"
+                       placeholder="Ergebnis für den Melder – geht bei done/rejected als Telegram-Nachricht raus"
+                       value="{{ i.resolution or '' }}">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-sm btn-primary w-100">Speichern</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

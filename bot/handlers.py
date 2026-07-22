@@ -236,6 +236,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "/briefing – Morgendliches Briefing jetzt\n"
         "/dashboard – Login-Link zu deinem Wochenplan\n"
         "/replan – Woche neu planen (`next` oder Datum für eine andere Woche)\n"
+        "/issues – Deine Meldungen zu WODpilot und ihr Status\n"
         "/settings – Deine Einstellungen\n"
         "/delete – Account löschen (DSGVO)\n\n"
         "Schreib mir einfach, schick mir eine Sprachnachricht oder ein Video – "
@@ -302,6 +303,40 @@ async def cmd_wod(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         lines.append(f"*{w['source']}*\n{w['content'][:500]}\n")
     from utils.telegram import send_safe
     await send_safe(msg.edit_text, "\n".join(lines)[:4096])
+
+
+async def cmd_issues(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """List the athlete's reported issues (the admin sees everyone's)."""
+    user = await _require_user(update)
+    if not user:
+        return
+
+    from config import get_config
+    from services.issues import format_issue_line, list_issues
+
+    is_admin = update.effective_user.id == get_config().admin_telegram_id
+    try:
+        issues = list_issues(user_id=None if is_admin else user["id"], limit=30)
+    except Exception as exc:
+        logger.exception("Issue list failed for user %s: %s", user["id"], exc)
+        await update.message.reply_text("❌ Issues konnten nicht geladen werden.")
+        return
+
+    if not issues:
+        await update.message.reply_text(
+            "Keine Meldungen vorhanden. Erzähl mir einfach, wenn dir an WODpilot "
+            "etwas fehlt oder nicht funktioniert – ich lege es als Issue an."
+        )
+        return
+
+    lines = ["*Deine Meldungen*" if not is_admin else "*Alle Meldungen*", ""]
+    for issue in issues:
+        lines.append(format_issue_line(issue))
+        if issue.get("resolution") and issue["status"] in ("done", "rejected"):
+            lines.append(f"    ↳ {issue['resolution']}")
+
+    from utils.telegram import send_safe
+    await send_safe(update.message.reply_text, "\n".join(lines)[:4096])
 
 
 async def cmd_briefing(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -498,6 +533,7 @@ def get_handlers():
         CommandHandler("briefing", cmd_briefing),
         CommandHandler("dashboard", cmd_dashboard),
         CommandHandler("replan", cmd_replan),
+        CommandHandler("issues", cmd_issues),
         CommandHandler("settings", cmd_settings),
         CommandHandler("delete", cmd_delete),
         MessageHandler(filters.PHOTO, handle_photo),

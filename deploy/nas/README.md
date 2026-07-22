@@ -87,6 +87,8 @@ sudo cp -a /tmp/wp/. /volume1/docker/wodpilot/
 # 3. Neue Migrations einspielen (idempotent – alles CREATE ... IF NOT EXISTS)
 sudo /usr/local/bin/docker exec -i wodpilot-db psql -U wodpilot -d wodpilot \
   < /volume1/docker/wodpilot/db/migrations/003_training_plans.sql
+sudo /usr/local/bin/docker exec -i wodpilot-db psql -U wodpilot -d wodpilot \
+  < /volume1/docker/wodpilot/db/migrations/004_issues.sql
 
 # 4. Images neu bauen und starten
 cd /volume1/docker/wodpilot/deploy/nas
@@ -105,21 +107,45 @@ sudo /usr/local/bin/docker compose logs -f bot
 **PostgREST cached das Schema.** Ohne den Neustart in Schritt 5 kennt es neue
 Tabellen nicht und die App bekommt 404 — obwohl die Migration sauber lief. Im
 Log muss die Relationszahl passen (`Schema cache loaded N Relations`); beim
-Update auf 003 stieg sie von 9 auf 13.
+Update auf 003 stieg sie von 9 auf 13, mit 004 kommt `issues` als 14. dazu.
 
 **Grants:** `40-grants.sql` nutzt `ALTER DEFAULT PRIVILEGES`, was nur für
 Objekte derselben anlegenden Rolle gilt. Migrations deshalb immer mit
 `-U wodpilot` einspielen. Kontrolle: `\dp <tabelle>` muss `service_role=arwdDxt`
 zeigen, die zugehörige `_id_seq` `service_role=rwU`.
 
-Die Datei unter `initdb/35-003_training_plans.sql` ist nur für eine **Neu**-
-Installation da; auf einer bestehenden DB passiert dort nichts.
+Die Dateien unter `initdb/35-003_training_plans.sql` und
+`initdb/36-004_issues.sql` sind nur für eine **Neu**-Installation da; auf einer
+bestehenden DB passiert dort nichts.
 
 ⚠️ Niemals mit `--delete` synchronisieren: Unter `data/db` liegt die laufende
 Postgres-Datenbank, in `.env` die Secrets. Beides ist nicht im Repo.
 
 `sudo` ist für Docker nötig, und der volle Pfad `/usr/local/bin/docker` auch –
 `sudo` setzt den PATH zurück.
+
+## Issue-MCP-Server
+
+Der Container `wodpilot-mcp` stellt den Issue-Backlog per FastMCP über HTTP
+bereit (`http://<netbird-ip>:3002/mcp`), damit eine Claude-Code-Session auf dem
+Mac Meldungen der Athleten lesen und abschließen kann.
+
+Zwei Dinge sichern ihn ab: `MCP_TOKEN` aus der `.env` als Bearer-Token und die
+Port-Bindung an `BIND_IP`, also das NetBird-Overlay. Aus dem LAN ist er nicht
+erreichbar. Der Token kommt aus `gen-secrets.sh`; bei einer bestehenden
+Installation muss er von Hand in die `.env` ergänzt werden – ohne ihn startet
+der Server ungeschützt und schreibt eine Warnung ins Log.
+
+Anders als der pi-agent geht der MCP-Server **nicht** über die Tools-API, sondern
+direkt über `services/issues.py` an PostgREST: Er läuft ohnehin im selben
+Docker-Netz, und ein zweiter HTTP-Hop bringt hier nichts.
+
+Prüfen:
+
+```bash
+docker compose logs mcp --tail 20
+curl -s -H "Authorization: Bearer $MCP_TOKEN" http://<netbird-ip>:3002/mcp
+```
 
 ## Zugriff
 

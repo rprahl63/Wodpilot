@@ -110,12 +110,22 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `/briefing` | Morgendliches Briefing |
 | `/dashboard` | Login-Link zum persönlichen Wochenplan |
 | `/replan` | Woche neu planen – überschreibt einen bestehenden Plan.<br>`/replan` = laufende Woche, `/replan next` = kommende, `/replan 2026-07-27` = bestimmte.<br>Resttext wird als Vorgabe an den Planer gegeben. |
+| `/issues` | Eigene Meldungen zu WODpilot samt Status |
 | `/settings` | Einstellungen |
 | `/delete` | Account löschen (DSGVO) |
 
 Zusätzlich: Freitext-Nachrichten, Sprachnachrichten, Bilder und Videos werden direkt vom
 Coach beantwortet. Sprachnachrichten werden transkribiert und wie getippte Nachrichten
 behandelt – auch Trainingsergebnisse lassen sich so einsprechen.
+
+## Produkt-Feedback
+
+Sagt ein Athlet im Chat, dass etwas an WODpilot nicht funktioniert oder fehlt, legt der
+Coach das als Issue in der Datenbank ab. Der MCP-Server unter `mcp_server/` macht diese
+Issues für eine Claude-Code-Session abrufbar; `.claude/skills/wodpilot-issues/SKILL.md`
+beschreibt, wie sie abgearbeitet werden. Ist ein Issue umgesetzt und deployed, bekommt der
+Melder automatisch eine Telegram-Nachricht. Das Admin-Dashboard zeigt den Backlog unter
+`/issues`.
 
 ## Garmin Integration
 

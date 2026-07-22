@@ -351,3 +351,72 @@ def test_session_result_validates_payload(client, auth_headers, payload):
 
     assert res.status_code == 400
     mock_log.assert_not_called()
+
+
+# ─── Issues ───────────────────────────────────────────────────────────────────
+
+def test_issues_endpoint_requires_token(client):
+    """The issue endpoint is internal like every other tools route."""
+    res = client.post("/api/tools/issues", json={"user_id": 1, "title": "x"})
+    assert res.status_code == 401
+
+
+def test_create_issue_stores_the_report(client, auth_headers):
+    """A filed bug comes back with its number so the coach can name it."""
+    created = {"id": 12, "title": "Dashboard-Link tot"}
+    with patch("services.issues.create_issue", return_value=created) as mock_create:
+        res = client.post(
+            "/api/tools/issues",
+            json={"user_id": 1, "title": "Dashboard-Link tot",
+                  "body": "404 nach Klick", "kind": "bug", "priority": "high"},
+            headers=auth_headers,
+        )
+
+    assert res.status_code == 200
+    assert res.get_json()["issue_id"] == 12
+    assert "#12" in res.get_json()["message"]
+    kwargs = mock_create.call_args.kwargs
+    assert kwargs["kind"] == "bug"
+    assert kwargs["priority"] == "high"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"user_id": 1},
+        {"title": "Kein Nutzer"},
+        {"user_id": 1, "title": "x", "kind": "wunsch"},
+        {"user_id": 1, "title": "x", "priority": "sofort"},
+    ],
+    ids=["no_title", "no_user", "bad_kind", "bad_priority"],
+)
+def test_create_issue_validates_payload(client, auth_headers, payload):
+    """Invalid input is rejected before it can hit the CHECK constraint."""
+    with patch("services.issues.create_issue") as mock_create:
+        res = client.post("/api/tools/issues", json=payload, headers=auth_headers)
+
+    assert res.status_code == 400
+    mock_create.assert_not_called()
+
+
+def test_list_issues_returns_only_the_athletes_own(client, auth_headers):
+    """The coach must never surface another athlete's report."""
+    rows = [{
+        "id": 12, "title": "Dashboard-Link tot", "kind": "bug", "priority": "high",
+        "status": "open", "created_at": "2026-07-20T10:00:00+00:00", "body": "geheim",
+    }]
+    with patch("services.issues.list_issues", return_value=rows) as mock_list:
+        res = client.get("/api/tools/issues?user_id=1", headers=auth_headers)
+
+    assert res.status_code == 200
+    assert mock_list.call_args.kwargs["user_id"] == 1
+    assert res.get_json()[0]["id"] == 12
+
+
+def test_list_issues_message_when_none(client, auth_headers):
+    """An empty backlog reads as a sentence, not as an empty list."""
+    with patch("services.issues.list_issues", return_value=[]):
+        res = client.get("/api/tools/issues?user_id=1", headers=auth_headers)
+
+    assert res.status_code == 200
+    assert "Keine offenen Issues" in res.get_json()["message"]

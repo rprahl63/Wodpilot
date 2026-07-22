@@ -433,5 +433,56 @@ export function createTools(
         return textResult(text);
       },
     },
+    {
+      name: "create_issue",
+      label: "Create Issue",
+      description:
+        "File a bug report or feature request about WODpilot itself (the app, bot, dashboard) so the developers see it. Use when the athlete reports something broken, missing or annoying about the product — never for training wishes, those belong in save_training_preferences. Confirm with the athlete before filing.",
+      parameters: Type.Object({
+        title: Type.String({
+          description: "Short, concrete summary, e.g. 'Dashboard-Link fuehrt ins Leere'",
+        }),
+        body: Type.String({
+          description:
+            "What happens, what was expected, and the steps to reproduce — in the athlete's own words. Multi-line.",
+        }),
+        kind: Type.Optional(
+          Type.String({ description: "One of: bug, feature, question, other" })
+        ),
+        priority: Type.Optional(
+          Type.String({
+            description:
+              "low, normal or high. 'high' only when the athlete cannot use a core function at all.",
+          })
+        ),
+      }),
+      execute: async (_id: string, params: unknown) => {
+        const p = params as {
+          title: string;
+          body?: string;
+          kind?: string;
+          priority?: string;
+        };
+        const text = await apiPost(`/api/tools/issues`, {
+          user_id: userId,
+          title: p.title,
+          body: p.body ?? "",
+          kind: p.kind ?? "other",
+          priority: p.priority ?? "normal",
+        });
+        return textResult(text);
+      },
+    },
+    {
+      name: "list_my_issues",
+      label: "List My Issues",
+      description:
+        "List the athlete's own open and in-progress issues with their status. Use when they ask what happened to something they reported, or before filing a possible duplicate.",
+      parameters: Type.Object({}),
+      execute: async () => {
+        const text = await apiGet(`/api/tools/issues?user_id=${userId}`);
+        return textResult(text);
+      },
+    },
   ];
 }

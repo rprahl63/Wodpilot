@@ -229,6 +229,33 @@ def create_app() -> Flask:
         ).data or []
         return render_template("wods.html", wods=wod_list)
 
+    # ─── Issues ───────────────────────────────────────────────────────────────
+
+    @app.route("/issues")
+    @login_required
+    def issues():
+        from services.issues import list_issues
+        status = request.args.get("status") or "open,in_progress"
+        issue_list = list_issues(status=None if status == "all" else status, limit=200)
+        return render_template("issues.html", issues=issue_list, status=status)
+
+    @app.route("/issues/<int:issue_id>/status", methods=["POST"])
+    @login_required
+    def issue_status(issue_id: int):
+        from services.issues import set_issue_status
+        status = request.form.get("status", "")
+        resolution = request.form.get("resolution") or None
+        try:
+            updated = set_issue_status(issue_id, status, resolution=resolution)
+        except ValueError as exc:
+            flash(str(exc), "danger")
+            return redirect(url_for("issues"))
+        if updated is None:
+            flash(f"Issue #{issue_id} nicht gefunden.", "warning")
+        else:
+            flash(f"Issue #{issue_id} → {status}.", "success")
+        return redirect(request.referrer or url_for("issues"))
+
     # ─── Config ───────────────────────────────────────────────────────────────
 
     @app.route("/config", methods=["GET", "POST"])
@@ -618,6 +645,46 @@ def create_app() -> Flask:
         if result is None:
             return jsonify({"message": "Keine passende Einheit gefunden. Erst get_week_plan aufrufen und die Session-ID nutzen."})
         return jsonify({"message": f"Ergebnis gespeichert für '{result['title']}' am {result['date']}."})
+
+    @app.route("/api/tools/issues", methods=["GET", "POST"])
+    def tools_issues():
+        _require_internal_token()
+        from services.issues import KINDS, PRIORITIES, create_issue, list_issues
+
+        if request.method == "POST":
+            data = request.get_json() or {}
+            user_id = data.get("user_id")
+            title = (data.get("title") or "").strip()
+            if not user_id or not title:
+                return jsonify({"error": "user_id, title required"}), 400
+            kind = data.get("kind") or "other"
+            priority = data.get("priority") or "normal"
+            if kind not in KINDS:
+                return jsonify({"error": f"kind must be one of {', '.join(KINDS)}"}), 400
+            if priority not in PRIORITIES:
+                return jsonify({"error": f"priority must be one of {', '.join(PRIORITIES)}"}), 400
+            issue = create_issue(
+                user_id,
+                title=title,
+                body=data.get("body") or "",
+                kind=kind,
+                priority=priority,
+            )
+            return jsonify({
+                "message": f"Issue #{issue['id']} angelegt: {issue['title']}",
+                "issue_id": issue["id"],
+            })
+
+        user_id = request.args.get("user_id", type=int)
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+        issue_list = list_issues(status="open,in_progress", user_id=user_id, limit=20)
+        if not issue_list:
+            return jsonify({"message": "Keine offenen Issues von diesem Athleten."})
+        return jsonify([
+            {k: i[k] for k in ("id", "title", "kind", "priority", "status", "created_at")}
+            for i in issue_list
+        ])
 
     # ─── Athlete dashboard (magic-link auth, /me/...) ─────────────────────────
 

@@ -135,6 +135,25 @@ services:
     mem_limit: 384m
     networks: [wodpilot]
 
+  # Issue backlog for Claude Code on the dev machine. Same NetBird-only
+  # exposure as web: no LAN access, no public port.
+  mcp:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.mcp
+    image: wodpilot-mcp:local
+    container_name: wodpilot-mcp
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      <<: *app-env
+      MCP_PORT: "3002"
+    ports:
+      - "${BIND_IP}:3002:3002"
+    depends_on: [rest]
+    mem_limit: 256m
+    networks: [wodpilot]
+
   bot:
     build:
       context: ../..

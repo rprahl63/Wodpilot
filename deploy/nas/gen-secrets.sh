@@ -38,6 +38,7 @@ print(f"POSTGRES_PASSWORD={secrets.token_urlsafe(24)}")
 print(f"AUTHENTICATOR_PASSWORD={secrets.token_urlsafe(24)}")
 print(f"INTERNAL_API_TOKEN={secrets.token_urlsafe(32)}")
 print(f"WEB_SECRET_KEY={secrets.token_urlsafe(32)}")
+print(f"MCP_TOKEN={secrets.token_urlsafe(32)}")
 
 from cryptography.fernet import Fernet  # noqa: E402
 print(f"ENCRYPTION_KEY={Fernet.generate_key().decode()}")

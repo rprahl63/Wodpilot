@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "wodpilot-issues": {
+      "type": "http",
+      "url": "${WODPILOT_MCP_URL}",
+      "headers": {
+        "Authorization": "Bearer ${WODPILOT_MCP_TOKEN}"
+      }
+    }
+  }
+}

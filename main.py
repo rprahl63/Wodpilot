@@ -33,6 +33,7 @@ BOT_COMMANDS = [
     BotCommand("wod", "Heutiges WOD"),
     BotCommand("prs", "Deine Personal Records"),
     BotCommand("briefing", "Morgendliches Briefing jetzt"),
+    BotCommand("issues", "Deine Meldungen zu WODpilot"),
     BotCommand("settings", "Einstellungen"),
     BotCommand("delete", "Account löschen (DSGVO)"),
 ]

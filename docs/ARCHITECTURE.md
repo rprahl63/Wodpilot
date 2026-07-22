@@ -25,6 +25,10 @@
 │  │  :3001                │     │  HTTP POST /chat           │  │
 │  └───────────────────────┘     └────────────────────────────┘  │
 │                                                                 │
+│  ┌───────────────────────┐                                      │
+│  │  Issue-MCP-Server     │◄──── Claude Code (Dev-Mac, NetBird)  │
+│  │  mcp_server/ :3002    │                                      │
+│  └───────────────────────┘                                      │
 └─────────────────────────────────────────────────────────────────┘
                         │
                         ▼
@@ -43,7 +47,7 @@ Begründung: `deploy/nas/README.md`.
 ### Telegram Bot (`bot/`)
 - **Framework:** python-telegram-bot 21.6
 - **Registrierung:** 6-stufiger `ConversationHandler` (INVITE_CODE → CONSENT → GARMIN_EMAIL → GARMIN_PASS → API_KEY → LLM_MODEL)
-- **Handler:** Text, Sprachnachrichten, Fotos, Videos, Befehle (/status, /prs, /wod, /briefing, /dashboard, /replan, /settings, /delete)
+- **Handler:** Text, Sprachnachrichten, Fotos, Videos, Befehle (/status, /prs, /wod, /briefing, /dashboard, /replan, /issues, /settings, /delete)
 - **Sprachnachrichten:** `services/transcription.py` transkribiert via Requesty
   (`POST /v1/audio/transcriptions`, BYOK-Key des Athleten). Das Transkript läuft danach
   durch denselben `_process_text`-Pfad wie eine getippte Nachricht – eine gesprochene
@@ -60,7 +64,7 @@ Begründung: `deploy/nas/README.md`.
   - `POST /plan-week` – Wochenplanung (schreibt die Einheiten per `save_week_plan`-Tool)
   - `POST /analyze` – Bild-/Videoanalyse via Vision-API
   - `GET /health` – Health-Check
-- **Tools:** 16 Tools. 15 davon machen HTTP-Calls an die Python Tools API;
+- **Tools:** 18 Tools. 17 davon machen HTTP-Calls an die Python Tools API;
   `web_search` geht direkt an Requesty (siehe unten)
 - **Websuche:** Requesty bietet ein serverseitiges `web_search`-Tool
   (`tools: [{type: "web_search"}]`) und übersetzt es je nach Provider (Anthropic,
@@ -79,6 +83,33 @@ Begründung: `deploy/nas/README.md`.
 - **Tools API** (`/api/tools/*`): Interne Routes für den pi-agent Service
   - Authentifizierung via `INTERNAL_API_TOKEN` Bearer-Token
   - Ruft Python-Servicefunktionen auf (garmin, memory, scraper)
+
+### Issue-MCP-Server (`mcp_server/`)
+- **Framework:** FastMCP 3, HTTP-Transport auf `:3002`, Endpoint `/mcp`
+- **Zweck:** Produkt-Feedback der Athleten für eine Claude-Code-Session abrufbar
+  und bearbeitbar machen. Tools: `list_issues`, `get_issue`, `claim_issue`,
+  `resolve_issue`, `reject_issue`, `reopen_issue`
+- **Auth:** Bearer-Token aus `MCP_TOKEN`; der Port ist zusätzlich nur an die
+  NetBird-IP gebunden
+- **Datenzugriff:** direkt über `services/issues.py`, nicht über die Tools-API –
+  der Server läuft im selben Docker-Netz wie PostgREST
+- **Gegenstück auf Client-Seite:** `.claude/skills/wodpilot-issues/SKILL.md`
+  beschreibt den Abarbeitungs-Workflow
+
+### Produkt-Feedback-Kreislauf
+
+```
+Athlet nennt im Chat ein Problem
+   → Coach legt es per create_issue an        (issues.status = 'open')
+   → Claude Code holt es per MCP, claim_issue (status = 'in_progress')
+   → umgesetzt, getestet, auf dem NAS deployed
+   → resolve_issue                            (status = 'done')
+   → services/issues.py schickt dem Melder eine Telegram-Nachricht
+```
+
+`done` wird bewusst erst nach dem Deploy gesetzt: In dem Moment bekommt der
+Athlet die Nachricht und schaut nach. `/issues` im Bot und die Admin-Seite
+`/issues` zeigen dieselbe Liste.
 
 ### APScheduler Jobs (`services/scheduler.py`)
 | Job | Zeit | Funktion |
@@ -177,6 +208,7 @@ Wichtigste Tabellen:
 | `training_plans` | Wochenplan pro User (week_start, status, constraints_text) |
 | `plan_sessions` | Einheiten inkl. Ergebnis (title, description, status, result_text, rpe) |
 | `login_tokens` | Magic-Link-Tokens fürs Athleten-Dashboard (token_hash, expires_at) |
+| `issues` | Produkt-Feedback (title, body, kind, priority, status, resolution) |
 
 SQL-Funktionen:
 - `search_coach_memory(user_id, query_embedding, match_count)` – pgvector Cosine Search

@@ -103,6 +103,25 @@ unter `deploy/nas/.env` die Secrets. Beides ist nicht im Repo.
 `docker compose build` ist zugleich der TypeScript-Check (das pi-agent-Dockerfile
 ruft `npm run build`), da auf dem Entwicklungs-Mac kein Node installiert ist.
 
+## Issues der Athleten
+
+Feedback zu WODpilot legt der Coach aus dem Chat heraus als Zeile in `issues` ab.
+Abgerufen und abgearbeitet wird es über den MCP-Server `wodpilot-issues`
+(Container `wodpilot-mcp`, `${BIND_IP}:3002`, Bearer-Token `MCP_TOKEN`). Der
+Workflow samt Statusmodell steht in `.claude/skills/wodpilot-issues/SKILL.md`.
+
+Damit Claude Code den Server findet, müssen auf dem Mac beide Variablen gesetzt
+sein – `.mcp.json` liest sie aus der Umgebung, damit NetBird-IP und Token nicht
+im Repo landen:
+
+```bash
+export WODPILOT_MCP_URL="http://<netbird-ip>:3002/mcp"
+export WODPILOT_MCP_TOKEN="<MCP_TOKEN aus deploy/nas/.env>"
+```
+
+Ein Issue geht erst auf `done`, wenn die Änderung **auf dem NAS deployed** ist –
+in diesem Moment bekommt der Melder automatisch eine Telegram-Nachricht.
+
 ## Weitere NAS-Informationen
 
 Kontext zum NAS, der **nicht** in dieses Repo gehört – Backup-Konzept,
