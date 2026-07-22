@@ -15,12 +15,14 @@ from bot.handlers import get_handlers, handle_delete_callback
 from bot.registration import get_registration_handler
 from config import get_config
 from services.scheduler import setup_scheduler
+from utils.log import silence_http_client_logs
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
+silence_http_client_logs()
 logger = logging.getLogger(__name__)
 
 # Shown in Telegram's "/" menu. Without this the commands still work when

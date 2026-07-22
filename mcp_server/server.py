@@ -23,12 +23,14 @@ from services.issues import (
     list_issues as _list_issues,
     set_issue_status,
 )
+from utils.log import silence_http_client_logs
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
+silence_http_client_logs()
 logger = logging.getLogger(__name__)
 
 # Fields worth handing to a model – the raw row carries embedding-sized noise

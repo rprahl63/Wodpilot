@@ -25,11 +25,13 @@ from flask import (
 from config import get_config
 from db.client import get_db
 from utils.crypto import encrypt, decrypt
+from utils.log import silence_http_client_logs
 
 logger = logging.getLogger(__name__)
 
 
 def create_app() -> Flask:
+    silence_http_client_logs()
     cfg = get_config()
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.secret_key = cfg.web_secret_key
